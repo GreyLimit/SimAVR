@@ -1,0 +1,67 @@
+word_register W 24
+byte_register WL 24
+byte_register WH 25
+word_register X 26
+byte_register XL 26
+byte_register XH 27
+word_register Y 28
+byte_register YL 28
+byte_register YH 29
+word_register Z 30
+byte_register ZL 30
+byte_register ZH 31
+program_address IRQ0 0
+program_address APP 92
+port_number PINB 3
+port_number DDRB 4
+port_number PORTB 5
+port_number PINC 6
+port_number DDRC 7
+port_number PORTC 8
+port_number PIND 9
+port_number DDRD 10
+port_number PORTD 11
+port_number TIFR0 21
+port_number TIFR1 22
+port_number TIFR2 23
+port_number PCIFR 27
+port_number EIFR 28
+port_number EIMSK 29
+port_number GPIOR0 30
+port_number EECR 31
+port_number EEDR 32
+port_number EEARL 33
+port_number EEARH 34
+port_number GTCCR 35
+port_number TCCR0A 36
+port_number TCCR0B 37
+port_number TCNT0 38
+port_number OCR0A 39
+port_number OCR0B 40
+port_number GPIOR1 42
+port_number GPIOR2 43
+port_number SPCR 44
+port_number SPSR 45
+port_number SPDR 46
+port_number ACSR 48
+port_number SMCR 51
+port_number MCUSR 52
+port_number MCUCR 53
+port_number SPMCSR 55
+port_number SPL 61
+port_number SPH 62
+port_number SREG 63
+
+
+
+
+
+program_address,
+memory_address,
+bit_constant,
+byte_constant,
+word_constant,
+program_word,
+byte_register,
+word_register,
+port_number
