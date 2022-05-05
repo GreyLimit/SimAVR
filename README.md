@@ -8,7 +8,7 @@ file produced by the Arduino IDE (or other system capable of outputting the HEX
 format).
 
 The aim is to provide an environment that will allow the code to be disassembled and
-executed instruction at a time, through subroutine calls, or upon break points or
+executed instruction at a time, through subroutine calls, or until break points or
 conditions are met.
 
 Speed of simulation is not the primary goal.
