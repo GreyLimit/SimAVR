@@ -23,6 +23,40 @@ class FusesPhaseOne : public FusesCore {
 		FusesPhaseOne( Reporter *report ) : FusesCore( report ) {
 		}
 		//
+		//	Decode fuse name
+		//	================
+		//
+		virtual bool decode( const char *name, byte *number, byte *lsb, byte *mask ) {
+			ASSERT( name != NULL );
+			ASSERT( number != NULL );
+			ASSERT( lsb != NULL );
+			ASSERT( mask != NULL );
+
+			
+			if( strcmp( name, "BODLEVEL" ) == 0 ) {
+				*number = high_fuse_byte;
+				*lsb = lsb_BODLEVEL;
+				*mask = mask_BODLEVEL;
+				return( true );
+			}
+			if( strcmp( name, "RSTDISBL" ) == 0 ) {
+				*number = high_fuse_byte;
+				*lsb = lsb_RSTDISBL;
+				*mask = mask_RSTDISBL;
+				return( true );
+			}
+			if( strcmp( name, "DWEN" ) == 0 ) {
+				*number = high_fuse_byte;
+				*lsb = lsb_DWEN;
+				*mask = mask_DWEN;
+				return( true );
+			}
+			//
+			//	Tail recursion it we fail to match.
+			//
+			return( FusesCore::decode( name, number, lsb, mask ));		
+		}
+		//
 		//	Brown Out Detection
 		//
 		virtual bool BODLEVEL_Enabled( void ) {		// Brown-out detection enabled?

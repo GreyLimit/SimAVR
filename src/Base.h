@@ -55,9 +55,9 @@ template< class T > static inline T bit( byte b ) {
 //	the bits below bit 'n' set.  A mask of 'n'
 //	bits.
 //
-#define MASK(t,n)	(((t)1<<((n)+1))-1)
+#define MASK(t,n)	(((t)1<<(n))-1)
 template< class T > static inline T mask( byte b ) {
-	return((((T)1) << ( b + 1 )) - 1 );
+	return((((T)1) << b ) - 1 );
 }
 
 //

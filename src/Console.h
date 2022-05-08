@@ -34,13 +34,50 @@ class Console : public Reporter {
 		//	We will use indirect variables to the IO stream
 		//	to enable extensions later on.
 		//
-		FILE	*_output,
-			*_input;
+		FILE		*_output,
+				*_input;
+
+		//
+		//	The exception trip flag.
+		//
+		bool		_tripped;
 
 		//
 		//	Define a generic buffer size.
 		//
 		static const int max_buffer = 100;
+
+		//
+		//	Keep list of exceptions that are always ignored.
+		//
+		struct ignore_item {
+			Level		lvl;
+			Modules		from;
+			Exception	number;
+			ignore_item	*next;
+		};
+		ignore_item	*_ignore_list;
+
+		//
+		//	Routines to add and test ignore tests.
+		//
+		bool ignore_exception( Level lvl, Modules from, Exception number ) {
+			for( ignore_item *p = _ignore_list; p != NULL; p = p->next ) {
+				if(( lvl == p->lvl )&&( from == p->from )&&( number == p->number )) return( true );
+			}
+			return( false );
+		}
+		void ignore_always( Level lvl, Modules from, Exception number ) {
+			ignore_item *p;
+			
+			ASSERT( !ignore_exception( lvl, from, number ));
+			p = new ignore_item;
+			p->lvl = lvl;
+			p->from = from;
+			p->number = number;
+			p->next = _ignore_list;
+			_ignore_list = p;
+		}
 		
 		//
 		//	Ask the console devise how to continue as a result
@@ -50,36 +87,44 @@ class Console : public Reporter {
 		//		Return true for terminate (current action)
 		//		Do not return for Abort (end program with core dump)
 		//
-		bool continue_terminate_abort( Level lvl ) {
+		bool continue_fail_abort( Level lvl, Modules from, Exception number ) {
 
 			char reply[ max_buffer ];
 
-			switch( lvl ) {
-				case Debug_Level:	return( false );
-				case Information_Level:	return( false );
-				case Validation_Level: {
-					abort();
-					return( true );
-				}
-				default: {
-					fprintf( _output, "(C)ontinue, (T)erminate or (A)bort? " );
-					fflush( _output );
-					while( fgets( reply, max_buffer, _input )) {
-						switch( reply[ 0 ]) {
-							case 'c':
-							case 'C':	return( false );
-							case 't':
-							case 'T':	return( true );
-							case 'a':
-							case 'A': 	abort();
-							default: {
-								fprintf( _output, "C, T or A? " );
-								fflush( _output );
-								break;
-							}
-						}
+			if( ignore_exception( lvl, from, number )) return( false );
+			fprintf( _output, "(C)ontinue, (I)gnore, (B)reak, (F)ail or (A)bort? " );
+			fflush( _output );
+			while( fgets( reply, max_buffer, _input )) {
+				switch( reply[ 0 ]) {
+					case 'c':
+					case 'C': {
+						return( false );
 					}
-					break;
+					case 'i':
+					case 'I': {
+						ignore_always( lvl, from, number );
+						return( false );
+					}
+					case 'b':
+					case 'B': {
+						_tripped = true;
+						return( false );
+					}
+					case 'f':
+					case 'F': {
+						_tripped = true;
+						return( true );
+					}
+					case 'a':
+					case 'A': {
+						abort();
+						break;
+					}
+					default: {
+						fprintf( _output, "C, I, B, F or A? " );
+						fflush( _output );
+						break;
+					}
 				}
 			}
 			//
@@ -92,41 +137,60 @@ class Console : public Reporter {
 		Console( void ) {
 			_output = stdout;
 			_input = stdin;
+			_tripped = false;
+			_ignore_list = NULL;
 		}
 		
 		virtual bool raise( Level lvl, Modules from, Exception number ) {
 			char buffer[ max_buffer ];
 
 			fprintf( _output, "[%s]\n", description( lvl, from, number, buffer, max_buffer ));
-			return( continue_terminate_abort( lvl ));
+			return( continue_fail_abort( lvl, from, number ));
 		}
 		
 		virtual bool raise( Level lvl, Modules from, Exception number, word arg ) {
 			char buffer[ max_buffer ];
 
 			fprintf( _output, "[%s] %d\n", description( lvl, from, number, buffer, max_buffer ), (int)arg );
-			return( continue_terminate_abort( lvl ));
+			return( continue_fail_abort( lvl, from, number ));
 		}
 		
 		virtual bool raise( Level lvl, Modules from, Exception number, dword arg1, word arg2 ) {
 			char buffer[ max_buffer ];
 
 			fprintf( _output, "[%s] %ld, %d\n", description( lvl, from, number, buffer, max_buffer ), (long int)arg1, (int)arg2 );
-			return( continue_terminate_abort( lvl ));
+			return( continue_fail_abort( lvl, from, number ));
 		}
 		
-		virtual bool raise( Level lvl, Modules from, Exception number, const char *mesg ) {
+		virtual bool raise( Level lvl, Modules from, Exception number, int instance, const char *mesg ) {
 			char buffer[ max_buffer ];
 
-			fprintf( _output, "[%s] %s\n", description( lvl, from, number, buffer, max_buffer ), mesg );
-			return( continue_terminate_abort( lvl ));
+			fprintf( _output, "[%s] %d:  %s\n", description( lvl, from, number, buffer, max_buffer ), instance, mesg );
+			return( continue_fail_abort( lvl, from, number ));
+		}
+		
+		virtual bool raise( Level lvl, Modules from, Exception number, int instance, const char *mesg, word arg ) {
+			char buffer[ max_buffer ];
+
+			fprintf( _output, "[%s] %d:  %s %d\n", description( lvl, from, number, buffer, max_buffer ), instance, mesg, arg );
+			return( continue_fail_abort( lvl, from, number ));
 		}
 		
 		virtual bool raise( Level lvl, Modules from, Exception number, const char *file, word line ) {
 			char buffer[ max_buffer ];
 
 			fprintf( _output, "[%s] '%s' line %d\n", description( lvl, from, number, buffer, max_buffer ), file, line );
-			return( continue_terminate_abort( lvl ));
+			return( continue_fail_abort( lvl, from, number ));
+		}
+		//
+		//	Check if an exception has been raised (using above
+		//	routines).  Return true if any have since the last
+		//	call to this routine.  Clear flag if set.
+		//
+		virtual bool exception( void ) {
+			bool tripped = _tripped;
+			_tripped = false;
+			return( tripped );
 		}
 };
 

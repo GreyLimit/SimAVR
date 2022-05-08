@@ -40,6 +40,13 @@ class CPU {
 		//	Return the address of the next instruction to execute.
 		//
 		virtual dword next_instruction( void ) = 0;
+
+		//
+		//	Place textual representation of a register into the buffer supplied.
+		//	return true if there are more registers, false otherwise.
+		//	start with register equal to zero.
+		//
+		virtual bool show_register( Symbols *labels, word reg, char *buffer, int max ) = 0;
 };
 
 #endif

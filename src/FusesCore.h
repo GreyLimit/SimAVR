@@ -103,9 +103,19 @@ class FusesCore : public Fuses {
 		//
 		static const byte bit_CKDIV8		= BIT( byte, 7 );
 		static const byte bit_CKOUT		= BIT( byte, 6 );
+		//
+		static const byte size_CKDIV8		= 1;
+		static const byte lsb_CKDIV8		= 7;
+		static const byte mask_CKDIV8		= MASK( byte, size_CKDIV8 );
+		//
+		static const byte size_CKOUT		= 1;
+		static const byte lsb_CKOUT		= 6;
+		static const byte mask_CKOUT		= MASK( byte, size_CKOUT );
+		//
 		static const byte size_SUT		= 2;
 		static const byte lsb_SUT		= 4;
 		static const byte mask_SUT		= MASK( byte, size_SUT );
+		//
 		static const byte size_CKSEL		= 4;
 		static const byte lsb_CKSEL		= 0;
 		static const byte mask_CKSEL		= MASK( byte, size_CKSEL );
@@ -115,15 +125,33 @@ class FusesCore : public Fuses {
 		//
 		static const byte bit_LB1		= BIT( byte, 0 );
 		static const byte bit_LB2		= BIT( byte, 1 );
+		//
 		static const byte bit_BLB01		= BIT( byte, 2 );
 		static const byte bit_BLB02		= BIT( byte, 3 );
 		static const byte bit_BLB11		= BIT( byte, 4 );
 		static const byte bit_BLB12		= BIT( byte, 5 );
+		//
+		static const byte size_LB		= 2;
+		static const byte lsb_LB		= 0;
+		static const byte mask_LB		= MASK( byte, size_LB );
+		//
+		static const byte size_BLB0		= 2;
+		static const byte lsb_BLB0		= 2;
+		static const byte mask_BLB0		= MASK( byte, size_BLB0 );
+		//
+		static const byte size_BLB1		= 2;
+		static const byte lsb_BLB1		= 4;
+		static const byte mask_BLB1		= MASK( byte, size_BLB1 );
+		//
 
 		//
 		//	Extended Fuse Bits.
 		//
 		static const byte bit_SPMEN		= BIT( byte, 0 );
+		//
+		static const byte size_SPMEN		= 1;
+		static const byte lsb_SPMEN		= 0;
+		static const byte mask_SPMEN		= MASK( byte, size_SPMEN );
 
 		//
 		//	Floating fuse functions always seem to remain
@@ -132,9 +160,15 @@ class FusesCore : public Fuses {
 		//	v High bytes).
 		//
 		static const byte bit_BOOTRST		= BIT( byte, 0 );
+		//
+		static const byte size_BOOTRST		= 1;
+		static const byte lsb_BOOTRST		= 0;
+		static const byte mask_BOOTRST		= MASK( byte, size_BOOTRST );
+		//
 		static const byte size_BOOTSZ		= 2;
 		static const byte lsb_BOOTSZ		= 1;
 		static const byte mask_BOOTSZ		= MASK( byte, size_BOOTSZ );
+		//
 		static const byte size_BODLEVEL		= 3;
 		static const byte lsb_BODLEVEL		= 0;
 		static const byte mask_BODLEVEL		= MASK( byte, size_BODLEVEL );
@@ -149,6 +183,34 @@ class FusesCore : public Fuses {
 		static const byte bit_JTAGEN		= BIT( byte, 6 );
 		static const byte bit_RSTDISBL		= BIT( byte, 7 );
 		static const byte bit_OCDEN		= BIT( byte, 7 );
+		//
+		static const byte size_EESAVE		= 1;
+		static const byte lsb_EESAVE		= 3;
+		static const byte mask_EESAVE		= MASK( byte, size_EESAVE );
+		//
+		static const byte size_WDTON		= 1;
+		static const byte lsb_WDTON		= 4;
+		static const byte mask_WDTON		= MASK( byte, size_WDTON );
+		//
+		static const byte size_SPIEN		= 1;
+		static const byte lsb_SPIEN		= 5;
+		static const byte mask_SPIEN		= MASK( byte, size_SPIEN );
+		//
+		static const byte size_DWEN		= 1;
+		static const byte lsb_DWEN		= 6;
+		static const byte mask_DWEN		= MASK( byte, size_DWEN );
+		//
+		static const byte size_JTAGEN		= 1;
+		static const byte lsb_JTAGEN		= 6;
+		static const byte mask_JTAGEN		= MASK( byte, size_JTAGEN );
+		//
+		static const byte size_RSTDISBL		= 1;
+		static const byte lsb_RSTDISBL		= 7;
+		static const byte mask_RSTDISBL		= MASK( byte, size_RSTDISBL );
+		//
+		static const byte size_OCDEN		= 1;
+		static const byte lsb_OCDEN		= 7;
+		static const byte mask_OCDEN		= MASK( byte, size_OCDEN );
 
 		//
 		//	Logical names for the various signature bytes.
@@ -201,6 +263,17 @@ class FusesCore : public Fuses {
 			if(( rb = ( ~_fuse[ adrs ] & value )) != 0 ) _report->raise( Error_Level, Fuse_Module, Restore_Invalid, adrs, rb );
 			_fuse[ adrs ] &= value;
 		}
+		
+		//
+		//	Burn a fuse byte.  Only to be used
+		//	by the file reading routine.
+		//
+		virtual bool burn( word adrs, byte value ) {
+			if( adrs >= fuse_bytes ) return( false );
+			_fuse[ adrs ] = value;
+			return( true );
+		}
+		
 		//
 		//	Read a signature byte.
 		//
@@ -210,6 +283,77 @@ class FusesCore : public Fuses {
 				return( 0xFF );
 			}
 			return( _sig[ adrs ]);
+		}
+		
+		//
+		//	Decode fuse name
+		//	================
+		//
+		//	This, and derived routines,  will between them
+		//	convert a textual fuse name into a set of values
+		//	representing the fuse byte number, least significant
+		//	bit number and bit mask for the fuse.  Returns
+		//	true if the name is identified, false other wise.
+		//
+		virtual bool decode( const char *name, byte *number, byte *lsb, byte *mask ) {
+			ASSERT( name != NULL );
+			ASSERT( number != NULL );
+			ASSERT( lsb != NULL );
+			ASSERT( mask != NULL );
+
+			
+			if( strcmp( name, "CKDIV8" ) == 0 ) {
+				*number = low_fuse_byte;
+				*lsb = lsb_CKDIV8;
+				*mask = mask_CKDIV8;
+				return( true );
+			}
+			if( strcmp( name, "CKOUT" ) == 0 ) {
+				*number = low_fuse_byte;
+				*lsb = lsb_CKOUT;
+				*mask = mask_CKOUT;
+				return( true );
+			}
+			if( strcmp( name, "SUT" ) == 0 ) {
+				*number = low_fuse_byte;
+				*lsb = lsb_SUT;
+				*mask = mask_SUT;
+				return( true );
+			}
+			if( strcmp( name, "CKSEL" ) == 0 ) {
+				*number = low_fuse_byte;
+				*lsb = lsb_CKSEL;
+				*mask = mask_CKSEL;
+				return( true );
+			}
+			if( strcmp( name, "LB" ) == 0 ) {
+				*number = lock_bits;
+				*lsb = lsb_LB;
+				*mask = mask_LB;
+				return( true );
+			}
+			if( strcmp( name, "SPIEN" ) == 0 ) {
+				*number = high_fuse_byte;
+				*lsb = lsb_SPIEN;
+				*mask = mask_SPIEN;
+				return( true );
+			}
+			if( strcmp( name, "WDTON" ) == 0 ) {
+				*number = high_fuse_byte;
+				*lsb = lsb_WDTON;
+				*mask = mask_WDTON;
+				return( true );
+			}
+			if( strcmp( name, "EESAVE" ) == 0 ) {
+				*number = lock_bits;
+				*lsb = lsb_EESAVE;
+				*mask = mask_EESAVE;
+				return( true );
+			}
+			//
+			//	Tail recursion it we fail to match.
+			//
+			return( Fuses::decode( name, number, lsb, mask ));		
 		}
 
 		//

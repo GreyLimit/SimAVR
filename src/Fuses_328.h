@@ -39,6 +39,34 @@ class Fuses_328 : public FusesPhaseTwo {
 		}
 		
 		//
+		//	Decode fuse name
+		//	================
+		//
+		virtual bool decode( const char *name, byte *number, byte *lsb, byte *mask ) {
+			ASSERT( name != NULL );
+			ASSERT( number != NULL );
+			ASSERT( lsb != NULL );
+			ASSERT( mask != NULL );
+
+			if( strcmp( name, "RSTDISBL" ) == 0 ) {
+				*number = high_fuse_byte;
+				*lsb = lsb_RSTDISBL;
+				*mask = mask_RSTDISBL;
+				return( true );
+			}
+			if( strcmp( name, "DWEN" ) == 0 ) {
+				*number = high_fuse_byte;
+				*lsb = lsb_DWEN;
+				*mask = mask_DWEN;
+				return( true );
+			}
+			//
+			//	Tail recursion it we fail to match.
+			//
+			return( FusesPhaseTwo::decode( name, number, lsb, mask ));		
+		}
+
+		//
 		virtual bool RSTDISBL( void ) {
 			return(( _fuse[ high_fuse_byte ] & bit_RSTDISBL ) == 0 );	// External reset disabled?
 		}

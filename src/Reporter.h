@@ -73,6 +73,10 @@ typedef enum {
 	//
 	Not_Supported,			// Requested API function not supported.
 	Ticker_Full,			// Failed to register with the clock.
+	Invalid_Identifier,		// Format of identifier name invalid.
+	Invalid_Number,			// Format of number invalid.
+	Overlap_Error,			// Two items overlap in error.
+	Config_Change,			// An element of the configuration has changed.
 
 	//
 	//	Exceptions specific to the execution of the simulation
@@ -137,8 +141,15 @@ class Reporter {
 		virtual bool raise( Level lvl, Modules from, Exception number ) = 0;
 		virtual bool raise( Level lvl, Modules from, Exception number, word arg ) = 0;
 		virtual bool raise( Level lvl, Modules from, Exception number, dword arg1, word arg2 ) = 0;
-		virtual bool raise( Level lvl, Modules from, Exception number, const char *mesg ) = 0;
+		virtual bool raise( Level lvl, Modules from, Exception number, int instance, const char *mesg ) = 0;
+		virtual bool raise( Level lvl, Modules from, Exception number, int instance, const char *mesg, word arg ) = 0;
 		virtual bool raise( Level lvl, Modules from, Exception number, const char *file, word line ) = 0;
+		//
+		//	Check if an exception has been raised (using above
+		//	routines).  Return true if any have since the last
+		//	call to this routine.  Clear flag if set.
+		//
+		virtual bool exception( void ) = 0;
 };
 
 #endif

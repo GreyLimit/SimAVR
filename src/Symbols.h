@@ -12,6 +12,8 @@
 //	System libraries
 //
 #include <stdio.h>
+#include <ctype.h>
+
 #include <cstring>
 
 
@@ -51,7 +53,7 @@ class Symbols {
 		//
 		//	Arbitrary input buffer size.
 		//
-		static const int max_buffer = 32;
+		static const int max_buffer = 80;
 		
 		//
 		//	Define a prefixes for non-decimal values.
@@ -81,13 +83,15 @@ class Symbols {
 		//
 		//	Find a label record by either name or value.
 		//
-		label *find_label( char *name ) {
+		label *find_label( symbol_type type, char *name ) {
 			label	*look;
 
 			for( look = _by_name; look; look = look->next_by_name ) {
-				int test = strcmp( name, look->name );
-				if( test == 0 )	return( look );
-				if( test < 0 ) return( NULL );
+				if( type == look->type ) {
+					int test = strcmp( name, look->name );
+					if( test == 0 )	return( look );
+					if( test < 0 ) return( NULL );
+				}
 			}
 			return( NULL );
 		}
@@ -107,9 +111,9 @@ class Symbols {
 		}
 
 		//
-		//	Convert text to a symbol type value.
+		//	Convert text to a symbol type value or the other way.
 		//
-		symbol_type type_name( const char *domain ) {
+		symbol_type type_name( char *domain ) {
 			if( strcmp( domain, "program_address" ) == 0 ) return( program_address );
 			if( strcmp( domain, "memory_address" ) == 0 ) return( memory_address );
 			if( strcmp( domain, "bit_constant" ) == 0 ) return( bit_constant );
@@ -121,6 +125,66 @@ class Symbols {
 			if( strcmp( domain, "port_number" ) == 0 ) return( port_number );
 			(void)_report->raise( Error_Level, Symbols_Module, Record_Error );
 			return( unspecified_type );
+		}
+		const char *name_type ( symbol_type domain ) {
+			switch( domain ) {
+				case program_address: return( "program_address" );
+				case memory_address: return( "memory_address" );
+				case bit_constant: return( "bit_constant" );
+				case byte_constant: return( "byte_constant" );
+				case word_constant: return( "word_constant" );
+				case program_word: return( "program_word" );
+				case byte_register: return( "byte_register" );
+				case word_register: return( "word_register" );
+				case port_number: return( "port_number" );
+				default: {
+					(void)_report->raise( Terminate_Level, Symbols_Module, Record_Error );
+					break;
+				}
+			}
+			return( "unspecified_type" );
+		}
+
+		//
+		//	Two routines for checking characters are valid
+		//	symbolic name components.
+		//
+		bool first_letter( char l ) {
+			return( isalpha( l ) || ( l == '_' ));
+		}
+		//
+		bool next_letter( char l ) {
+			return( isalnum( l ) || ( l == '_' ));
+		}
+		//
+		//	Return the number of characters which
+		//	which form a valid identifier.
+		//
+		int ident_len( char *p ) {
+			int i = 0;
+			if( first_letter( *p++ )) {
+				i++;
+				while( next_letter( *p++ )) i++;
+			}
+			return( i );
+		}
+		//
+		//	Check a character for possible numeric value
+		//
+		bool numeric( char c, int *r ) {
+			if(( c >= '0' )&&( c <= '9' )) {
+				*r = c - '0';
+				return( true );
+			}
+			if(( c >= 'a' )&&( c <= 'f' )) {
+				*r = 10 + c - 'a';
+				return( true );
+			}
+			if(( c >= 'A' )&&( c <= 'F' )) {
+				*r = 10 + c - 'A';
+				return( true );
+			}
+			return( false );
 		}
 
 	public:
@@ -139,6 +203,10 @@ class Symbols {
 		bool new_label( char *name, symbol_type type, dword value ) {
 			label	**adrs, *ptr, *rec;
 
+			if( ident_len( name ) != strlen( name )) {
+				_report->raise( Error_Level, Symbols_Module, Invalid_Identifier );
+				return( false );
+			}
 			adrs = &_by_name;
 			while(( ptr = *adrs ) != NULL ) {
 				if( strcmp( name, ptr->name ) < 0 ) break;
@@ -268,32 +336,177 @@ class Symbols {
 		}
 
 		//
+		//	Offer a mechanism for converting an EOS terminated
+		//	string into an actual value.  This needs to be provided
+		//	with the domain the calculation belongs in.
+		//
+		bool evaluate( symbol_type type, char *string, dword *value ) {
+			//
+			//	For the moment, this is limited to the absolutely
+			//	the most basic parsing;  the text follows one of
+			//	the following layout/formats:
+			//
+			//	number	[0-9][0-9]*			Decimal
+			//		%[01][01]*			Binary
+			//		$[0-9A-Fa-f][0-9A-Fa-f]*	Hexidecimal
+			//
+			//	ident	[_A-Za-z][_A-Za-z0-9]*
+			//
+			//	expr	{ident}[+-]{number}		Expression
+			//
+			//	Full expression evaluation could be placed here, but
+			//	seems over the top at this point.
+			//
+			dword	base,
+				sum;
+			char	*ptr,
+				*fix, with;
+			bool	add;
+			int	i, b;
+
+			base = 0;
+			sum = 0;
+			ptr = string;
+			fix = NULL;
+			add = true;
+			if(( i = ident_len( ptr )) > 0 ) {
+				label	*l;
+
+				ptr += i;
+				with = *( fix = ptr );
+				*ptr++ = EOS;
+
+				if(( l = find_label( type, string )) == NULL ) {
+					_report->raise( Error_Level, Symbols_Module, Invalid_Identifier );
+					return( false );
+				}
+				base = l->value;
+				switch( with ) {
+					case EOS: {
+						*value = base;
+						return( true );
+					}
+					case '+': {
+						add = true;
+						break;
+					}
+					case '-': {
+						add = false;
+						break;
+					}
+					default: {
+						_report->raise( Error_Level, Symbols_Module, Format_Error );
+						return( false );
+					}
+				}
+			}
+			switch( *ptr ) {
+				case hexidecimal: {
+					b = 16;
+					ptr++;
+					break;
+				}
+				case binary: {
+					b = 2;
+					ptr++;
+					break;
+				}
+				default: {
+					b = 10;
+					break;
+				}
+			}
+			while( numeric( *ptr, &i )) {
+				if( i >= b ) {
+					_report->raise( Error_Level, Symbols_Module, Invalid_Number );
+					return( false );
+				}
+				sum = sum * b + i;
+				ptr++;
+			}
+			if( *ptr != EOS ) {
+				_report->raise( Error_Level, Symbols_Module, Format_Error );
+				return( false );
+			}
+			if( fix ) *fix = with;
+			if( add ) {
+				base += sum;
+			}
+			else {
+				base -= sum;
+			}
+			*value = base;
+			return( true );
+		}
+
+		//
 		//	Read in symbols from a file.
 		//
 		//	Note/
 		//
 		//		The code in this routine is essentially unsafe and broken
-		//		as this offers an opportunity for a buffer over flow if the
+		//		as this offers an opportunity for a buffer overflow if the
 		//		input data is too large.
 		//
-		bool load_symbols( const char *file ) {
+		//		I need to fix this.
+		//
+		bool load_symbols( char *file ) {
 			FILE	*source;
 
-			char	domain[ max_buffer ],
-				name[ max_buffer ];
-			int	value;
+			char		buffer[ max_buffer ],
+					domain[ max_buffer ],
+					name[ max_buffer ],
+					expr[ max_buffer ];
+			symbol_type	type;
+			int		line, n, problems;
+			dword		value;
 
 			if( file == NULL ) return( true );
 			if(( source = fopen( file, "r" )) == NULL ) return( false );
-			while( fscanf( source, "%s%s%d\n", domain, name, &value ) == 3 ) {
-				if( new_label( name, type_name( domain ), (dword)value )) {
-					printf( "%s / %s = %d\n", domain, name, value );
-				}
-				else {
-					return( false );
+			problems = 0;
+			line = 0;
+			while( fgets( buffer, max_buffer, source )) {
+				line++;
+				if(( *buffer != '#' )&&(( n = sscanf( buffer, "%s%s%s", domain, name, expr )) == 3 )) {
+					type = type_name( domain );
+					if( evaluate( type, expr, &value )) {
+						if( !new_label( name, type, value )) {
+							if( _report->raise( Error_Level, Symbols_Module, Record_Error, file, line )) {
+								fclose( source );
+								return ( false );
+							}
+							problems++;
+						}
+					}
+					else {
+						if( _report->raise( Error_Level, Symbols_Module, Invalid_Number, file, line )) {
+							fclose( source );
+							return( false );
+						}
+						problems++;
+					}
 				}
 			}
 			fclose( source );
+			return( problems == 0 );
+		}
+
+		//
+		//	Save all the symbols to a file.
+		//
+		bool save_symbols( char *file ) {
+			FILE	*to;
+			label	*look;
+
+			if( file == NULL ) return( false );
+			if(( to = fopen( file, "w" )) == NULL ) {
+				_report->raise( Error_Level, Symbols_Module, File_Open_Failed );
+				return( false );
+			}
+			for( look = _by_name; look != NULL; look = look->next_by_name ) {
+				fprintf( to, "%s %s %ld\n", name_type( look->type ), look->name, (long int)( look->value ));
+			}
+			fclose( to );
 			return( true );
 		}
 };

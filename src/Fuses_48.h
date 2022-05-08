@@ -46,6 +46,29 @@ class Fuses_48 : public FusesPhaseOne {
 				}
 			}
 		}
+		
+		//
+		//	Decode fuse name
+		//	================
+		//
+		virtual bool decode( const char *name, byte *number, byte *lsb, byte *mask ) {
+			ASSERT( name != NULL );
+			ASSERT( number != NULL );
+			ASSERT( lsb != NULL );
+			ASSERT( mask != NULL );
+
+			if( strcmp( name, "SPMEN" ) == 0 ) {
+				*number = extended_fuse_byte;
+				*lsb = lsb_SPMEN;
+				*mask = mask_SPMEN;
+				return( true );
+			}
+			//
+			//	Tail recursion it we fail to match.
+			//
+			return( FusesPhaseOne::decode( name, number, lsb, mask ));		
+		}
+		
 		//
 		//	Program memory protection.
 		//

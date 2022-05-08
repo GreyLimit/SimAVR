@@ -121,7 +121,9 @@ class AVR_CPU;
 #include "Clock.h"
 #include "CPU.h"
 #include "Symbols.h"
+#include "Fuses.h"
 #include "Validation.h"
+#include "DeviceRegister.h"
 
 //
 //	Also need to be able to raise exceptions and reports
@@ -151,7 +153,25 @@ executed.
 //
 //	The AVR CPU State
 //
-class AVR_CPU : public CPU {
+class AVR_CPU : public CPU, Notification {
+	public:
+		//
+		//	Define the Device Register identifiers for all the
+		//	IO based registers that the CPU uses.  The numbers
+		//	are arbitrary and do not specify the actual IO port
+		//	number they might be located at.
+		//
+		static const word SPH	= 0;
+		static const word SPL	= 1;
+		static const word SREG	= 2;
+		static const word RAMD	= 3;
+		static const word RAMX	= 4;
+		static const word RAMY	= 5;
+		static const word RAMZ	= 6;
+		static const word EIND	= 7;
+		static const word MCUCR	= 8;
+		static const word MCUSR	= 9;
+		
 	private:
 		//
 		//	Initialisation flag.
@@ -200,6 +220,7 @@ class AVR_CPU : public CPU {
 		//
 		Flash		*_program;
 		Programmer	*_programmer;
+		Fuses		*_fuses;
 
 		//
 		//	The various element of memory:
@@ -238,57 +259,82 @@ class AVR_CPU : public CPU {
 				_pc_mask;
 
 		//
+		//	Define the address of the boot area.
+		//
+		dword		_boot_area;
+
+		//
+		//	Where is the IRQ vector located?
+		//
+		dword		_irq_vector;
+
+		//
 		//	The Status Register
 		//	===================
 		//
-		//	Define the IO port where the status register
-		//	is found.
-		//
-		static const word status_register = 0x3F;
+		byte		_sreg;
 		//
 		//	Define Status register individual bit names
 		//
-		static const byte status_register_I = 0x80;
-		static const byte status_register_T = 0x40;
-		static const byte status_register_H = 0x20;
-		static const byte status_register_S = 0x10;
-		static const byte status_register_V = 0x08;
-		static const byte status_register_N = 0x04;
-		static const byte status_register_Z = 0x02;
-		static const byte status_register_C = 0x01;
+		static const byte sreg_I = BIT( byte, 7 );
+		static const byte sreg_T = BIT( byte, 6 );
+		static const byte sreg_H = BIT( byte, 5 );
+		static const byte sreg_S = BIT( byte, 4 );
+		static const byte sreg_V = BIT( byte, 3 );
+		static const byte sreg_N = BIT( byte, 2 );
+		static const byte sreg_Z = BIT( byte, 1 );
+		static const byte sreg_C = BIT( byte, 0 );
 
 		//
-		//	The Stack Pointer (effectively 16 bit).
-		//	=======================================
+		//	The Stack Pointer
+		//	=================
 		//
-		//	Define the IO ports where the stack pointer
-		//	is found.
-		//
-		static const word stack_pointer_h = 0x3E;
-		static const word stack_pointer_l = 0x3D;
-
-		//
-		//	Private Stack Pointer access routines.
-		//
-		inline word get_SP( void ) { return( combine( _io->read( stack_pointer_h ), _io->read( stack_pointer_l ))); }
-		inline void set_SP( word sp ) { _io->write( stack_pointer_l, low( sp )); _io->write( stack_pointer_h, high( sp )); }
+		word		_sp;
 
 		//
 		//	The Extended Indirect Register
 		//	==============================
 		//
-		static const word extended_indirect = 0x3C;
+		byte		_eind;
 
 		//
-		//	Extended memory RAM pointer registers
-		//	=====================================
+		//	Extended RAM registers
+		//	======================
 		//
-		//	Define IO ports where the RAM registers are located.
+		byte		_ram_z,
+				_ram_y,
+				_ram_x,
+				_ram_d;
+
 		//
-		static const word ram_z_pointer = 0x3B;
-		static const word ram_y_pointer = 0x3A;
-		static const word ram_x_pointer = 0x39;
-		static const word ram_d_pointer = 0x38;
+		//	The MCU Control Register
+		//	========================
+		//
+		byte		_mcucr;
+		//
+		static const byte mcucr_BODS = BIT( byte, 6 );
+		static const byte mcucr_BODSE = BIT( byte, 5 );
+		static const byte mcucr_PUD = BIT( byte, 4 );
+		static const byte mcucr_IVSEL = BIT( byte, 1 );
+		static const byte mcucr_IVCE = BIT( byte, 0 );
+		//
+		static const byte mask_MCUCR = mcucr_BODS | mcucr_BODSE | mcucr_PUD | mcucr_IVSEL | mcucr_IVCE;
+		
+
+		//
+		//	The MCU Status Register
+		//	=======================
+		//
+		byte		_mcusr;
+		//
+		//	Individual bit names.
+		//
+		static const byte mcusr_WDRF = BIT( byte, 3 );
+		static const byte mcusr_BORF = BIT( byte, 2 );
+		static const byte mcusr_EXTRF = BIT( byte, 1 );
+		static const byte mcusr_PORF = BIT( byte, 0 );
+		//
+		static const byte mask_MCUSR = mcusr_WDRF | mcusr_BORF | mcusr_EXTRF | mcusr_PORF;
 
 	public:
 		//
@@ -328,6 +374,7 @@ class AVR_CPU : public CPU {
 					byte		pas,		// Program Address size (bits)
 					Flash		*program,
 					Programmer	*programmer,	
+					Fuses		*fuses,	
 					Memory		*data,
 					Memory		*regs,
 					Memory		*io,
@@ -345,8 +392,9 @@ class AVR_CPU : public CPU {
 		//
 		void AVR_CPU::construct(	AVR_InstSet	cpu,
 					byte		pas,		// Program Address size (bits)
-					Flash		*program,	
+					Flash		*program,
 					Programmer	*programmer,	
+					Fuses		*fuses,	
 					Memory		*data,
 					Memory		*regs,
 					Memory		*io,
@@ -375,6 +423,7 @@ class AVR_CPU : public CPU {
 			//
 			_program = program;
 			_programmer = programmer;
+			_fuses = fuses;
 			//
 			//	Memory in its various forms.
 			//
@@ -397,6 +446,12 @@ class AVR_CPU : public CPU {
 			//	Save the error handler.
 			//
 			_reporter = handler;
+
+			//
+			//	Initial system is powered on.
+			//
+			_mcusr = mcusr_PORF;
+			_mcucr = 0;
 
 			//
 			//	Reset internal registers.
@@ -461,8 +516,8 @@ class AVR_CPU : public CPU {
 		byte get_sr( void );
 		void set_sr( byte val );
 {BS}
-		byte AVR_CPU::get_sr( void ) { return( _io->read( status_register )); }
-		void AVR_CPU::set_sr( byte val ) { _io->write( status_register, val ); }
+		byte AVR_CPU::get_sr( void ) { return( _sreg ); }
+		void AVR_CPU::set_sr( byte val ) { _sreg = val; }
 {B}
 		
 		//	I: Global Interrupt Enable
@@ -471,8 +526,8 @@ class AVR_CPU : public CPU {
 		bool get_I( void );
 		void set_I( bool v );
 {BS}
-		bool AVR_CPU::get_I( void ) { return( _io->read( status_register ) & status_register_I ); }
-		void AVR_CPU::set_I( bool v ) { _io->write( status_register, (( _io->read( status_register ) & ~status_register_I )|( v? status_register_I: 0x00 ))); }
+		bool AVR_CPU::get_I( void ) { return( _sreg & sreg_I ); }
+		void AVR_CPU::set_I( bool v ) { _sreg = ( _sreg & ~sreg_I )|( v? sreg_I: 0x00 ); }
 {B}
 
 		//
@@ -482,8 +537,8 @@ class AVR_CPU : public CPU {
 		bool get_T( void );
 		void set_T( bool v );
 {BS}
-		bool AVR_CPU::get_T( void ) { return( _io->read( status_register ) & status_register_T ); }
-		void AVR_CPU::set_T( bool v ) { _io->write( status_register, (( _io->read( status_register ) & ~status_register_T )|( v? status_register_T: 0x00 ))); }
+		bool AVR_CPU::get_T( void ) { return( _sreg  & sreg_T ); }
+		void AVR_CPU::set_T( bool v ) { _sreg = ( _sreg & ~sreg_T )|( v? sreg_T: 0x00 ); }
 {B}
 
 		//
@@ -493,8 +548,8 @@ class AVR_CPU : public CPU {
 		bool get_H( void );
 		void set_H( bool v );
 {BS}
-		bool AVR_CPU::get_H( void ) { return( _io->read( status_register ) & status_register_H ); }
-		void AVR_CPU::set_H( bool v ) { _io->write( status_register, (( _io->read( status_register ) & ~status_register_H )|( v? status_register_H: 0x00 ))); }
+		bool AVR_CPU::get_H( void ) { return( _sreg & sreg_H ); }
+		void AVR_CPU::set_H( bool v ) { _sreg = ( _sreg & ~sreg_H )|( v? sreg_H: 0x00 ); }
 {B}
 
 		//
@@ -504,8 +559,8 @@ class AVR_CPU : public CPU {
 		bool get_S( void );
 		void set_S( bool v );
 {BS}
-		bool AVR_CPU::get_S( void ) { return( _io->read( status_register ) & status_register_S ); }
-		void AVR_CPU::set_S( bool v ) { _io->write( status_register, (( _io->read( status_register ) & ~status_register_S )|( v? status_register_S: 0x00 ))); }
+		bool AVR_CPU::get_S( void ) { return( _sreg & sreg_S ); }
+		void AVR_CPU::set_S( bool v ) { _sreg = ( _sreg & ~sreg_S )|( v? sreg_S: 0x00 ); }
 {B}
 
 		//
@@ -515,8 +570,8 @@ class AVR_CPU : public CPU {
 		bool get_V( void );
 		void set_V( bool v );
 {BS}
-		bool AVR_CPU::get_V( void ) { return( _io->read( status_register ) & status_register_V ); }
-		void AVR_CPU::set_V( bool v ) { _io->write( status_register, (( _io->read( status_register ) & ~status_register_V )|( v? status_register_V: 0x00 ))); }
+		bool AVR_CPU::get_V( void ) { return( _sreg & sreg_V ); }
+		void AVR_CPU::set_V( bool v ) { _sreg = ( _sreg & ~sreg_V )|( v? sreg_V: 0x00 ); }
 {B}
 
 		//
@@ -526,8 +581,8 @@ class AVR_CPU : public CPU {
 		bool get_N( void );
 		void set_N( bool v );
 {BS}
-		bool AVR_CPU::get_N( void ) { return( _io->read( status_register ) & status_register_N ); }
-		void AVR_CPU::set_N( bool v ) { _io->write( status_register, (( _io->read( status_register ) & ~status_register_N )|( v? status_register_N: 0x00 ))); }
+		bool AVR_CPU::get_N( void ) { return( _sreg & sreg_N ); }
+		void AVR_CPU::set_N( bool v ) { _sreg = ( _sreg & ~sreg_N )|( v? sreg_N: 0x00 ); }
 {B}
 
 		//
@@ -537,8 +592,8 @@ class AVR_CPU : public CPU {
 		bool get_Z( void );
 		void set_Z( bool v );
 {BS}
-		bool AVR_CPU::get_Z( void ) { return( _io->read( status_register ) & status_register_Z ); }
-		void AVR_CPU::set_Z( bool v ) { _io->write( status_register, (( _io->read( status_register ) & ~status_register_Z )|( v? status_register_Z: 0x00 ))); }
+		bool AVR_CPU::get_Z( void ) { return( _sreg & sreg_Z ); }
+		void AVR_CPU::set_Z( bool v ) { _sreg = ( _sreg & ~sreg_Z )|( v? sreg_Z: 0x00 ); }
 {B}
 
 		//
@@ -548,8 +603,8 @@ class AVR_CPU : public CPU {
 		bool get_C( void );
 		void set_C( bool v );
 {BS}
-		bool AVR_CPU::get_C( void ) { return( _io->read( status_register ) & status_register_C ); }
-		void AVR_CPU::set_C( bool v ) { _io->write( status_register, (( _io->read( status_register ) & ~status_register_C )|( v? status_register_C: 0x00 ))); }
+		bool AVR_CPU::get_C( void ) { return( _sreg & sreg_C ); }
+		void AVR_CPU::set_C( bool v ) { _sreg = ( _sreg & ~sreg_C )|( v? sreg_C: 0x00 ); }
 {B}
 
 		//
@@ -561,44 +616,35 @@ class AVR_CPU : public CPU {
 		void push_byte( byte v );
 {BS}
 		void AVR_CPU::push_byte( byte v ) {
-			word sp = get_SP();
-			_data->write( sp--, v );
-			set_SP( sp );
+			_data->write( _sp--, v );
 		}
 {B}
 		void push_word( word v );
 {BS}
 		void AVR_CPU::push_word( word v ) {
-			word sp = get_SP();
 			//
 			//	Push MSB first to maintain little-endian
 			//	data order in memory.
 			//
-			_data->write( sp--, high( v ));
-			_data->write( sp--, low( v ));
-			set_SP( sp );
+			_data->write( _sp--, high( v ));
+			_data->write( _sp--, low( v ));
 		}
 {B}
 		byte pop_byte( void );
 {BS}
 		byte AVR_CPU::pop_byte( void ) {
-			word sp = get_SP();
-			byte v = _data->read( ++sp );
-			set_SP( sp );
-			return( v );
+			return( _data->read( ++_sp ));
 		}
 {B}
 		word pop_word( void );
 {BS}
 		word AVR_CPU::pop_word( void ) {
-			word sp = get_SP();
 			//
 			//	Pop LSB first as this is the reverse of
 			//	the push action.
 			//
-			byte l = _data->read( ++sp );
-			byte h = _data->read( ++sp );
-			set_SP( sp );
+			byte l = _data->read( ++_sp );
+			byte h = _data->read( ++_sp );
 			return( combine( h, l ));
 		}
 {B}
@@ -746,7 +792,7 @@ class AVR_CPU : public CPU {
 		bool raise( Level lvl, Exception number, const char *mesg );
 {BS}
 		bool AVR_CPU::raise( Level lvl, Exception number, const char *mesg ) {
-			return( _reporter->raise( lvl, CPU_Module, number, mesg ));
+			return( _reporter->raise( lvl, CPU_Module, number, 0, mesg ));
 		}
 {B}
 
@@ -760,11 +806,11 @@ class AVR_CPU : public CPU {
 		byte get_rampx( void );
 		byte get_rampd( void );
 {BS}
-		byte AVR_CPU::get_eind( void ) { return( _io->read( extended_indirect )); }
-		byte AVR_CPU::get_rampz( void ) { return( _io->read( ram_z_pointer )); }
-		byte AVR_CPU::get_rampy( void ) { return( _io->read( ram_y_pointer )); }
-		byte AVR_CPU::get_rampx( void ) { return( _io->read( ram_x_pointer )); }
-		byte AVR_CPU::get_rampd( void ) { return( _io->read( ram_d_pointer )); }
+		byte AVR_CPU::get_eind( void ) { return( _eind ); }
+		byte AVR_CPU::get_rampz( void ) { return( _ram_z ); }
+		byte AVR_CPU::get_rampy( void ) { return( _ram_y ); }
+		byte AVR_CPU::get_rampx( void ) { return( _ram_x ); }
+		byte AVR_CPU::get_rampd( void ) { return( _ram_d ); }
 {B}
 		void set_eind( byte val );
 		void set_rampz( byte val );
@@ -772,11 +818,11 @@ class AVR_CPU : public CPU {
 		void set_rampx( byte val );
 		void set_rampd( byte val );
 {BS}
-		void AVR_CPU::set_eind( byte val ) { _io->write( extended_indirect, val ); }
-		void AVR_CPU::set_rampz( byte val ) { _io->write( ram_z_pointer, val ); }
-		void AVR_CPU::set_rampy( byte val ) { _io->write( ram_y_pointer, val ); }
-		void AVR_CPU::set_rampx( byte val ) { _io->write( ram_x_pointer, val ); }
-		void AVR_CPU::set_rampd( byte val ) { _io->write( ram_d_pointer, val ); }
+		void AVR_CPU::set_eind( byte val ) { _eind = val; }
+		void AVR_CPU::set_rampz( byte val ) { _ram_z = val; }
+		void AVR_CPU::set_rampy( byte val ) { _ram_y = val; }
+		void AVR_CPU::set_rampx( byte val ) { _ram_x = val; }
+		void AVR_CPU::set_rampd( byte val ) { _ram_d = val; }
 {B}
 
 		//
@@ -839,34 +885,41 @@ class AVR_CPU : public CPU {
 		dword get_rampz_rz( void );
 {BS}
 		dword AVR_CPU::get_rampz_rz( void ) {
-			return(( (dword)get_rampz() << 16 ) | (dword)get_rz());
+			return(( (dword)_ram_z << 16 ) | (dword)get_rz());
 		}
 {B}
 		dword inc_rampz_rz( void );
 {BS}
 		dword AVR_CPU::inc_rampz_rz( void ) {
-			word z = get_rz();
-			byte p = get_rampz();
-			word c = z + 1;
-			set_rz( c );			// Save incremented z
-			if( !c ) set_rampz( p + 1 );	// increment rampz if z rolled to zero.
-			return(( (dword)p << 16 ) | (dword)z );
+			word	z;
+			dword	b, a;
+
+			z = get_rz();
+			b = ((dword)_ram_z << 16 ) | z;
+			z = (word)( a = b + 1 );
+			_ram_z = (byte)( a >> 16 );
+			set_rz( z );
+			return( b );
 		}
 {B}
 		dword dec_rampz_rz( void );
 {BS}
 		dword AVR_CPU::dec_rampz_rz( void ) {
-			word z = get_rz() - 1;
-			byte p = get_rampz();
-			set_rz( z );			// Save decremented z
-			if( !z ) set_rampz( p - 1 );	// decrement rampz if z rolled to zero.
-			return(( (dword)p << 16 ) | (dword)z );
+			word	z;
+			dword	v;
+
+			z = get_rz();
+			v = ((dword)_ram_z << 16 ) | z;
+			z = (word)( v -= 1 );
+			_ram_z = (byte)( v >> 16 );
+			set_rz( z );
+			return( v );
 		}
 {B}
 		dword get_eind_rz( void );
 {BS}
 		dword AVR_CPU::get_eind_rz( void ) {
-			return(( (dword)get_eind() << 16 ) | (dword)get_rz());
+			return(( (dword)_eind << 16 ) | (dword)get_rz());
 		}
 {B}
 		//
@@ -875,28 +928,35 @@ class AVR_CPU : public CPU {
 		dword get_rampy_ry( void );
 {BS}
 		dword AVR_CPU::get_rampy_ry( void ) {
-			return(( (dword)get_rampy() << 16 ) | (dword)get_ry());
+			return(( (dword)_ram_y << 16 ) | (dword)get_ry());
 		}
 {B}
 		dword inc_rampy_ry( void );
 {BS}
 		dword AVR_CPU::inc_rampy_ry( void ) {
-			word y = get_ry();
-			byte p = get_rampy();
-			word c = y + 1;
-			set_ry( c );			// Save incremented y
-			if( !c ) set_rampy( p + 1 );	// increment rampy if y rolled to zero.
-			return(( (dword)p << 16 ) | (dword)y );
+			word	y;
+			dword	b, a;
+
+			y = get_ry();
+			b = ((dword)_ram_y << 16 ) | y;
+			y = (word)( a = b + 1 );
+			_ram_y = (byte)( a >> 16 );
+			set_ry( y );
+			return( b );
 		}
 {B}
 		dword dec_rampy_ry( void );
 {BS}
 		dword AVR_CPU::dec_rampy_ry( void ) {
-			word y = get_ry() - 1;
-			byte p = get_rampy();
-			set_ry( y );			// Save decremented y
-			if( !y ) set_rampy( p - 1 );	// decrement rampy if y rolled to zero.
-			return(( (dword)p << 16 ) | (dword)y );
+			word	y;
+			dword	v;
+
+			y = get_ry();
+			v = ((dword)_ram_y << 16 ) | y;
+			y = (word)( v -= 1 );
+			_ram_y = (byte)( v >> 16 );
+			set_ry( y );
+			return( v );
 		}
 {B}
 		//
@@ -905,28 +965,35 @@ class AVR_CPU : public CPU {
 		dword get_rampx_rx( void );
 {BS}
 		dword AVR_CPU::get_rampx_rx( void ) {
-			return(( (dword)get_rampx() << 16 ) | (dword)get_rx());
+			return(( (dword)_ram_x << 16 ) | (dword)get_rx());
 		}
 {B}
 		dword inc_rampx_rx( void );
 {BS}
 		dword AVR_CPU::inc_rampx_rx( void ) {
-			word x = get_rx();
-			byte p = get_rampx();
-			word c = x + 1;
-			set_rx( c );			// Save incremented x
-			if( !c ) set_rampx( p + 1 );	// increment rampx if x rolled to zero.
-			return(( (dword)p << 16 ) | (dword)x );
+			word	x;
+			dword	b, a;
+
+			x = get_rx();
+			b = ((dword)_ram_x << 16 ) | x;
+			x = (word)( a = b + 1 );
+			_ram_x = (byte)( a >> 16 );
+			set_rx( x );
+			return( b );
 		}
 {B}
 		dword dec_rampx_rx( void );
 {BS}
 		dword AVR_CPU::dec_rampx_rx( void ) {
-			word x = get_rx() - 1;
-			byte p = get_rampx();
-			set_rx( x );			// Save decremented x
-			if( !x ) set_rampx( p - 1 );	// decrement rampx if x rolled to zero.
-			return(( (dword)p << 16 ) | (dword)x );
+			word	x;
+			dword	v;
+
+			x = get_rx();
+			v = ((dword)_ram_x << 16 ) | x;
+			x = (word)( v -= 1 );
+			_ram_x = (byte)( v >> 16 );
+			set_rx( x );
+			return( v );
 		}
 {B}
 		//
@@ -935,7 +1002,7 @@ class AVR_CPU : public CPU {
 		dword get_rampd_const( word v );
 {BS}
 		dword AVR_CPU::get_rampd_const( word v ) {
-			return(( (dword)get_rampd() << 16 ) | (dword)v );
+			return(( (dword)_ram_d << 16 ) | (dword)v );
 		}
 {B}
 
@@ -1022,26 +1089,45 @@ class AVR_CPU : public CPU {
 			//	Status register cleared; global interrupts
 			//	disabled.
 			//
-			_io->write( status_register, 0 );
+			_sreg = 0;
 
 			//
 			//	Clearing the RAM* and EIND registers
 			//
-			_io->write( extended_indirect, 0 );
-			_io->write( ram_z_pointer, 0 );
-			_io->write( ram_y_pointer, 0 );
-			_io->write( ram_x_pointer, 0 );
-			_io->write( ram_d_pointer, 0 );
+			_eind = 0;
+			_ram_z = 0;
+			_ram_y = 0;
+			_ram_x = 0;
+			_ram_d = 0;
 
 			//
 			//	Stack pointer set to the last byte of memory.
 			//
-			set_SP( _data->capacity()-1 );
-			
+			_sp = _data->capacity()-1;
+
 			//
-			//	Program Counter set start of flash memory.
+			//	Set the boot area address.
 			//
-			_pc = 0x0000;
+			_boot_area = ((dword)_program->total_pages() * (dword)_program->page_size()) - (dword)_fuses->BOOTSZ();
+
+			//
+			//	Set up the initial program counter.
+			//
+			if( _fuses->BOOTRST()) {
+				_pc = _boot_area;
+			}
+			else {
+				_pc = 0x000000;
+			}
+			//
+			//	Initialise the interrupt vector from IVSEL in MCUCR.
+			//
+			if( _mcucr & mcucr_IVSEL ) {
+				_irq_vector = _boot_area;
+			}
+			else {
+				_irq_vector = 0x000000;
+			}
 		}
 {B}
 		//
@@ -1133,7 +1219,7 @@ class AVR_CPU : public CPU {
 					//	and that IRQ numbers start at 1, so we need to subtract 1
 					//	before calculating the target address.
 					//
-					_clock->tick( push_pc( (dword)( irq - 1 ) << 1 ) + 3 );
+					_clock->tick( push_pc( _irq_vector + ( (dword)( irq - 1 ) << 1 )) + 3 );
 				}
 			}
 		
@@ -1176,6 +1262,170 @@ class AVR_CPU : public CPU {
 {BS}
 		dword AVR_CPU::next_instruction( void ) {
 			return( _pc );
+		}
+{B}
+
+		//
+		//	Place textual representation of a register into the buffer supplied.
+		//	return true if there are more registers, false otherwise.
+		//	start with register equal to zero.
+		//
+		virtual bool show_register( Symbols *labels, word reg, char *buffer, int max );
+{BS}
+		bool AVR_CPU::show_register( Symbols *labels, word reg, char *buffer, int max ) {
+			word f;
+			
+			//
+			//	We will use reg numbers 0 - 31 for r0 through r31,
+			//	then the following sequence:
+			// 
+			//		32	SP
+			//		33	SREG
+			//		34	PC
+			//		35	EIND
+			//		36	RAMD
+			//		37	RAMX
+			//		38	RAMY
+			//		39	RAMZ
+			//
+			if( reg < 32 ) {
+				char	name[ 16 ];
+				
+				snprintf( buffer, max, "%s=%02X", labels->expand( byte_register, reg, name, 16 ), (int)read_reg( reg ));
+				return( true );
+			}
+			switch( reg ) {
+				case 32: {
+					snprintf( buffer, max, "SP=%04X", _sp );
+					return( true );
+				}
+				case 33: {
+					snprintf( buffer, max, "SREG=%02X", _sreg );
+					return( true );
+				}
+				case 34: {
+					snprintf( buffer, max, "PC=%04X", _pc );
+					return( true );
+				}
+				case 35: {
+					snprintf( buffer, max, "EIND=%02X", _eind );
+					return( true );
+				}
+				case 36: {
+					snprintf( buffer, max, "RAMD=%02X", _ram_d );
+					return( true );
+				}
+				case 37: {
+					snprintf( buffer, max, "RAMX=%02X", _ram_x );
+					return( true );
+				}
+				case 38: {
+					snprintf( buffer, max, "RAMY=%02X", _ram_y );
+					return( true );
+				}
+				case 39: {
+					snprintf( buffer, max, "RAMZ=%02X", _ram_z );
+					return( true );
+				}
+				case 40: {
+					snprintf( buffer, max, "MCUCR=%02X", _mcucr );
+					return( true );
+				}
+				case 41: {
+					snprintf( buffer, max, "MCUSR=%02X", _mcusr );
+					return( true );
+				}
+				case 42: {
+					snprintf( buffer, max, "BOOT=%04X", _boot_area );
+					return( true );
+				}
+				case 43: {
+					snprintf( buffer, max, "IRQVec=%04X", _irq_vector );
+					return( true );
+				}
+				default: {
+					break;
+				}
+			}
+			f = reg - 44;
+			snprintf( buffer, max, "fuse[%d]=%02X", f, _fuses->read( f ));
+			return( f < 3 );
+		}
+{B}
+
+		//
+		//	The Notification API
+		//	====================
+		//
+		virtual byte read_register( word id );
+		virtual void write_register( word id, byte value );
+{BS}
+		byte AVR_CPU::read_register( word id ) {
+			switch( id ) {
+				case SPH: return( high( _sp ));
+				case SPL: return( low( _sp ));
+				case SREG: return( _sreg );
+				case RAMD: return( _ram_d );
+				case RAMX: return( _ram_x );
+				case RAMY: return( _ram_y );
+				case RAMZ: return( _ram_z );
+				case EIND: return( _eind );
+				case MCUCR: return( _mcucr );
+				case MCUSR: return( _mcusr );
+				default: {
+					ABORT();
+					break;
+				}
+			}
+			return( 0 );
+		}
+		void AVR_CPU::write_register( word id, byte value ) {
+			switch( id ) {
+				case SPH: {
+					_sp = combine( value, low( _sp ));
+					break;
+				}
+				case SPL: {
+					_sp = combine( high( _sp ), value );
+					break;
+				}
+				case SREG: {
+					_sreg = value;
+					break;
+				}
+				case RAMD: {
+					_ram_d = value;
+					break;
+				}
+				case RAMX: {
+					_ram_x = value;
+					break;
+				}
+				case RAMY: {
+					_ram_y = value;
+					break;
+				}
+				case RAMZ: {
+					_ram_z = value;
+					break;
+				}
+				case EIND: {
+					_eind = value;
+					break;
+				}
+				case MCUCR: {
+					_mcucr = value & mask_MCUCR;
+					break;
+				}
+				case MCUSR: {
+					_mcusr = value & mask_MCUSR;
+					break;
+				}
+				default: {
+					ABORT();
+					break;
+				}
+			}
 		}
 {B}
 

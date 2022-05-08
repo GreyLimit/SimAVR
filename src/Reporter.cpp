@@ -105,6 +105,11 @@ static ExceptionName exceptions[] = {
 	
 	{ Not_Supported,		"Not supported"		},
 	{ Ticker_Full,			"Ticker table full"	},
+	{ Invalid_Identifier,		"Identifier invalid"	},
+	{ Invalid_Number,		"Number format invalid"	},
+	{ Overlap_Error,		"Objects Overlap"	},
+	{ Config_Change,		"Config Change"		},
+		
 	{ Address_OOR,			"Address OOR"		},
 	{ Data_OOR,			"Data OOR"		},
 	{ Register_OOR,			"Register OOR"		},
@@ -149,7 +154,7 @@ char *Reporter::exception_name( Exception cause, char *buffer, int len ) {
 //
 char *Reporter::description( Level lvl, Modules module, Exception cause, char *buffer, int len ) {
 
-	static const int max_lvl = 10;
+	static const int max_lvl = 15;
 	static const int max_module = 15;
 	static const int max_exception = 20;
 

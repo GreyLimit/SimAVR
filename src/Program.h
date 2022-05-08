@@ -23,7 +23,7 @@
 //
 //	The flash memory class.
 //
-template< word _page_size, word _page_count, word _boot_pages, word _op_duration > class Program : public Flash {
+template< int instance, word _page_size, word _page_count, word _boot_pages, word _op_duration > class Program : public Flash {
 	private:
 		//
 		//	Define the total number of words the flash memory
@@ -143,7 +143,7 @@ template< word _page_size, word _page_count, word _boot_pages, word _op_duration
 			//	Start by getting the file..
 			//
 			if(( source = fopen( filename, "r" )) == NULL ) {
-				_report->raise( Error_Level, Program_Module, File_Open_Failed, filename );
+				_report->raise( Error_Level, Program_Module, File_Open_Failed, instance, filename );
 				return( false );
 			}
 
@@ -256,7 +256,7 @@ template< word _page_size, word _page_count, word _boot_pages, word _op_duration
 							//
 							//	Just too big, raise error and bail out.
 							//
-							_report->raise( Error_Level, Program_Module, Line_Too_Long, line );
+							_report->raise( Error_Level, Program_Module, Line_Too_Long, instance, "Line too long", line );
 							fclose( source );
 							return( false );
 						}
@@ -291,7 +291,7 @@ template< word _page_size, word _page_count, word _boot_pages, word _op_duration
 					for( word i = 0; i < available; sum += decoded[ i++ ]);
 					sum = ( ~sum + 1 ) & 0xff;
 					if( sum != decoded[ available ]) {
-						_report->raise( Error_Level, Program_Module, Checksum_Error, line );
+						_report->raise( Error_Level, Program_Module, Checksum_Error, instance, "Checksum error", line );
 						fclose( source );
 						return( false );
 					}
@@ -300,7 +300,7 @@ template< word _page_size, word _page_count, word _boot_pages, word _op_duration
 					//	Record length w.r.t. count:
 					//
 					if(( count = decoded[ record_count ]) != ( available - record_data )) {
-						_report->raise( Error_Level, Program_Module, Format_Error, line );
+						_report->raise( Error_Level, Program_Module, Format_Error, instance, "Format error in line", line );
 						fclose( source );
 						return( false );
 					}
@@ -340,7 +340,7 @@ template< word _page_size, word _page_count, word _boot_pages, word _op_duration
 								//	In range?
 								//
 								if( wide_adrs >= total ) {
-									_report->raise( Error_Level, Program_Module, Program_Too_Big, line );
+									_report->raise( Error_Level, Program_Module, Program_Too_Big, instance, "Program too large", line );
 									fclose( source );
 									return( false );
 								}
@@ -361,7 +361,7 @@ template< word _page_size, word _page_count, word _boot_pages, word _op_duration
 								//	Move to next address
 								//
 								if( ++adrs == 0x0000 ) {
-									_report->raise( Error_Level, Program_Module, Address_Wraps, line );
+									_report->raise( Error_Level, Program_Module, Address_Wraps, instance, "Program address wraps", line );
 									fclose( source );
 									return( false );
 								}
@@ -384,7 +384,7 @@ template< word _page_size, word _page_count, word _boot_pages, word _op_duration
 							//	02	Extended Segment Address
 							//
 							if( count != 2 ) {
-								_report->raise( Error_Level, Program_Module, Format_Error, line );
+								_report->raise( Error_Level, Program_Module, Format_Error, instance, "Format error in segment address", line );
 								fclose( source );
 								return( false );
 							}
@@ -422,7 +422,7 @@ template< word _page_size, word _page_count, word _boot_pages, word _op_duration
 							//
 							//	Unrecognised Record Number.
 							//
-							_report->raise( Error_Level, Program_Module, Record_Error, line );
+							_report->raise( Error_Level, Program_Module, Record_Error, instance, "Unrecognised record number", line );
 							fclose( source );
 							return( false );
 						}
@@ -434,7 +434,7 @@ template< word _page_size, word _page_count, word _boot_pages, word _op_duration
 			//	If we get here then there was no end of file
 			//	record, which is an error in its own right.
 			//
-			_report->raise( Error_Level, Program_Module, Program_Truncated );
+			_report->raise( Error_Level, Program_Module, Program_Truncated, instance, "End of program missing", line );
 			fclose( source );
 			return( false );
 		}

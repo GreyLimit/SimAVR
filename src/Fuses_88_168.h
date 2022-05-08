@@ -68,6 +68,35 @@ class Fuses_88_168 : public FusesPhaseOne {
 		}
 		
 		//
+		//	Decode fuse name
+		//	================
+		//
+		virtual bool decode( const char *name, byte *number, byte *lsb, byte *mask ) {
+			ASSERT( name != NULL );
+			ASSERT( number != NULL );
+			ASSERT( lsb != NULL );
+			ASSERT( mask != NULL );
+
+			
+			if( strcmp( name, "OCDEN" ) == 0 ) {
+				*number = high_fuse_byte;
+				*lsb = lsb_OCDEN;
+				*mask = mask_OCDEN;
+				return( true );
+			}
+			if( strcmp( name, "JTAGEN" ) == 0 ) {
+				*number = high_fuse_byte;
+				*lsb = lsb_JTAGEN;
+				*mask = mask_JTAGEN;
+				return( true );
+			}
+			//
+			//	Tail recursion it we fail to match.
+			//
+			return( FusesPhaseOne::decode( name, number, lsb, mask ));		
+		}
+
+		//
 		virtual bool RSTDISBL( void ) {
 			return( false );					// External reset disabled?
 		}

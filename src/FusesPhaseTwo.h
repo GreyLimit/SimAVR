@@ -61,6 +61,52 @@ class FusesPhaseTwo : public FusesCore {
 			}
 		}
 		//
+		//	Decode fuse name
+		//	================
+		//
+		virtual bool decode( const char *name, byte *number, byte *lsb, byte *mask ) {
+			ASSERT( name != NULL );
+			ASSERT( number != NULL );
+			ASSERT( lsb != NULL );
+			ASSERT( mask != NULL );
+
+			
+			if( strcmp( name, "BODLEVEL" ) == 0 ) {
+				*number = extended_fuse_byte;
+				*lsb = lsb_BODLEVEL;
+				*mask = mask_BODLEVEL;
+				return( true );
+			}
+			if( strcmp( name, "BOOTSZ" ) == 0 ) {
+				*number = high_fuse_byte;
+				*lsb = lsb_BOOTSZ;
+				*mask = mask_BOOTSZ;
+				return( true );
+			}
+			if( strcmp( name, "BOOTRST" ) == 0 ) {
+				*number = high_fuse_byte;
+				*lsb = lsb_BOOTRST;
+				*mask = mask_BOOTRST;
+				return( true );
+			}
+			if( strcmp( name, "BLB0" ) == 0 ) {
+				*number = lock_bits;
+				*lsb = lsb_BLB0;
+				*mask = mask_BLB0;
+				return( true );
+			}
+			if( strcmp( name, "BLB1" ) == 0 ) {
+				*number = lock_bits;
+				*lsb = lsb_BLB1;
+				*mask = mask_BLB1;
+				return( true );
+			}
+			//
+			//	Tail recursion it we fail to match.
+			//
+			return( FusesCore::decode( name, number, lsb, mask ));		
+		}
+		//
 		//	Brown Out Detection
 		//
 		virtual bool BODLEVEL_Enabled( void ) {		// Brown-out detection enabled?

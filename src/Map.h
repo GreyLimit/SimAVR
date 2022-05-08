@@ -20,23 +20,44 @@
 //
 //	Define the template map class.
 //
-template< word elements > class Map : public Memory {
+class Map : public Memory {
+	public:
+		//
+		//	The Map API
+		//	===========
+		//
+		virtual bool segment( Memory *block, word adrs ) = 0;
+		
+		//
+		//	Memory API
+		//	==========
+		//
+		virtual byte read( word adrs ) = 0;
+		virtual void write( word adrs, byte value ) = 0;
+		virtual byte modify( word adrs, byte clear, byte set, byte toggle ) = 0;
+		virtual word capacity( void ) = 0;
+};
+
+
+//
+//	Define the template map class.
+//
+template< int instance >class MapSegments : public Memory {
 	private:
 		//
 		//	Internal Map structure.
 		//
 		struct component {
-			word	base,
-				size;
-			Memory	*handler;
+			word		base,
+					size;
+			Memory		*handler;
+			component	*next;
 		};
 
 		//
 		//	Map elements.
 		//
-		component	_segment[ elements ];
-		word		_defined;
-		byte		_bad_memory;
+		component	*_segments;
 
 		//
 		//	Error handling.
@@ -49,8 +70,9 @@ template< word elements > class Map : public Memory {
 		component *find( word adrs ) {
 			component *ptr;
 
-			ptr = _segment;
-			for( word i = 0; i < _defined; i++, ptr++ ) if(( adrs >= ptr->base )&&(( adrs - ptr->base ) < ptr->size )) return( ptr );
+			for( ptr = _segments; ptr != NULL; ptr = ptr->next ) {
+				if(( adrs >= ptr->base )&&(( adrs - ptr->base ) < ptr->size )) return( ptr );
+			}
 			return( NULL );
 		}
 
@@ -58,21 +80,46 @@ template< word elements > class Map : public Memory {
 		//
 		//	Constructor.
 		//
-		Map( Reporter *handler ) {
+		MapSegments( Reporter *handler ) {
 			_report = handler;
-			_defined = 0;
-			_bad_memory = 0;
+			_segments = NULL;
 		}
 
 		//
 		//	Insert section into memory map.
 		//
-		virtual bool segment( Memory *handler, word adrs ) {
-			if( _defined >= elements ) return( false );
-			_segment[ _defined ].base = adrs;
-			_segment[ _defined ].size = handler->capacity();
-			_segment[ _defined ].handler = handler;
-			_defined++;
+		virtual bool segment( Memory *block, word adrs ) {
+			component	*p, **a;
+			
+			word		z = block->capacity();
+			word		t = adrs + z;
+
+			for( a = &_segments; ( p = *a ) != NULL; a = &( p->next )) {
+				if(( adrs < p->base )&&( t <= p->base )) {
+					//
+					//	The whole of this block comes before
+					//	the block p, so we can add here.
+					//
+					break;
+				}
+				if( adrs < ( p->base + p->size )) {
+					//
+					//	The start of this block is inside the
+					//	block at p, so we definitely cannot add
+					//	this block.
+					//
+					return( !_report->raise( Error_Level, Map_Module, Overlap_Error, instance, "New segments overlaps existing segment", adrs ));
+				}
+			}
+			//
+			//	Create and insert a new record at a.
+			//
+			p = new component;
+			p->base = adrs;
+			p->size = z;
+			p->handler = block;
+			p->next = *a;
+			*a = p;
 			return( true );
 		}
 		
@@ -84,45 +131,28 @@ template< word elements > class Map : public Memory {
 			component *ptr;
 			
 			if(( ptr = find( adrs ))) return( ptr->handler->read( adrs - ptr->base ));
-			_report->raise( Warning_Level, Map_Module, Address_OOR, adrs );
+			_report->raise( Warning_Level, Map_Module, Address_OOR, instance, "Address not in mapped segment", adrs );
 			return( 0 );
 		}
 		virtual void write( word adrs, byte value ) {
 			component *ptr;
 			
 			if(( ptr = find( adrs ))) return( ptr->handler->write( adrs - ptr->base, value ));
-			_report->raise( Warning_Level, Map_Module, Address_OOR, adrs );
+			_report->raise( Warning_Level, Map_Module, Address_OOR, instance, "Address not in mapped segment", adrs );
 		}
 		virtual byte modify( word adrs, byte clear, byte set, byte toggle ) {
 			component *ptr;
 			
 			if(( ptr = find( adrs ))) return( ptr->handler->modify( adrs - ptr->base, clear, set, toggle ));
-			_report->raise( Warning_Level, Map_Module, Address_OOR, adrs );
+			_report->raise( Warning_Level, Map_Module, Address_OOR, instance, "Address not in mapped segment", adrs );
 			return( 0 );
 		}
 		virtual word capacity( void ) {
-			component *best;
+			component *l;
 			
-			switch( _defined ) {
-				case 0: {
-					return( 0 );
-				}
-				case 1: {
-					best = _segment;
-					break;
-				}
-				default: {
-					component *ptr;
-
-					best = &( _segment[ 0 ]);
-					ptr = &( _segment[ 1 ]);
-					for( word i = 1; i < _defined; i++, ptr++ ) {
-						if( ptr->base > best->base ) best = ptr;
-					}
-					break;
-				}
-			}
-			return( best->base + best->size );
+			if( _segments == NULL ) return( 0 );
+			for( l = _segments; l->next != NULL; l = l->next );
+			return(( l->base - _segments->base ) + l->size );
 		}
 };
 

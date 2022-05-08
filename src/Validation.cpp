@@ -16,12 +16,18 @@
 //	validation_reports pointer.
 //
 
-static class : public Reporter {
+static class ValidationReporter : public Reporter {
+	private:
+		bool	_tripped;
 	public:
+		ValidationReporter( void ) {
+			_tripped = false;
+		}
 		virtual bool raise( Level lvl, Modules from, Exception number ){ ABORT(); return( true ); }		
 		virtual bool raise( Level lvl, Modules from, Exception number, word arg ) { ABORT(); return( true ); }
 		virtual bool raise( Level lvl, Modules from, Exception number, dword arg1, word arg2 ) { ABORT(); return( true ); }
-		virtual bool raise( Level lvl, Modules from, Exception number, const char *mesg ) { ABORT(); return( true ); }
+		virtual bool raise( Level lvl, Modules from, Exception number, int instance, const char *mesg ) { ABORT(); return( true ); }
+		virtual bool raise( Level lvl, Modules from, Exception number, int instance, const char *mesg, word arg ) { ABORT(); return( true ); }
 		
 		virtual bool raise( Level lvl, Modules from, Exception number, const char *file, word line ) {
 			ASSERT( lvl == Validation_Level );
@@ -43,6 +49,13 @@ static class : public Reporter {
 				}
 			}
 			return( true );
+		}
+		virtual bool exception( void ) {
+			bool	tripped;
+
+			tripped = _tripped;
+			_tripped = false;
+			return( tripped );
 		}
 } default_validation;
 
