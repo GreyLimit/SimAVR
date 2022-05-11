@@ -40,6 +40,10 @@ static const char EOS = 0;
 //
 //	Provide some syntactic sugar to clarify coding.
 //
+//	This should be wrapped around arguments which are
+//	defined but are unused.
+//
+#define UNUSED(x)	__attribute__((unused)) x
 
 //
 //	Return a value of a specified type with the

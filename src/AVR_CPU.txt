@@ -153,7 +153,7 @@ executed.
 //
 //	The AVR CPU State
 //
-class AVR_CPU : public CPU, Notification {
+class AVR_CPU : public CPU, Notification, Tick {
 	public:
 		//
 		//	Define the Device Register identifiers for all the
@@ -171,6 +171,13 @@ class AVR_CPU : public CPU, Notification {
 		static const word EIND	= 7;
 		static const word MCUCR	= 8;
 		static const word MCUSR	= 9;
+		static const word WDTCSR = 10;
+
+		//
+		//	Define clock IDs we might use
+		//
+		static const word System_Clock = 0;
+		static const word WDT_Clock = 1;
 		
 	private:
 		//
@@ -336,6 +343,28 @@ class AVR_CPU : public CPU, Notification {
 		//
 		static const byte mask_MCUSR = mcusr_WDRF | mcusr_BORF | mcusr_EXTRF | mcusr_PORF;
 
+		//
+		//	The WDTCSR Watch Dog Control Register
+		//	=====================================
+		//
+		byte		_wdtcsr;
+		//
+		static const byte wdtcsr_WDIF = BIT( byte, 7 );
+		static const byte wdtcsr_WDIE = BIT( byte, 6 );
+		static const byte wdtcsr_WDP3 = BIT( byte, 5 );
+		static const byte wdtcsr_WDCE = BIT( byte, 4 );
+		static const byte wdtcsr_WDE = BIT( byte, 3 );
+		static const byte wdtcsr_WDP2 = BIT( byte, 2 );
+		static const byte wdtcsr_WDP1 = BIT( byte, 1 );
+		static const byte wdtcsr_WDP0 = BIT( byte, 0 );
+
+		//
+		//	The watchdog count down and reset values..
+		//
+		dword		_wdt_remaining,
+				_wdt_reset;
+		bool		_wdt_enabled;
+
 	public:
 		//
 		//	AVR_CPU CONSTRUCTOR
@@ -452,9 +481,13 @@ class AVR_CPU : public CPU, Notification {
 			//
 			_mcusr = mcusr_PORF;
 			_mcucr = 0;
-
+			_wdtcsr = 0;
+			_wdt_remaining = 0;
+			_wdt_reset = 0;
+			_wdt_enabled = false;
+			
 			//
-			//	Reset internal registers.
+			//	Reset everything.
 			//
 			reset();
 		}
@@ -1055,6 +1088,7 @@ class AVR_CPU : public CPU, Notification {
 			//
 			//	Resets the timer associated with the watch dog resetting the MCU.
 			//
+			_wdt_remaining = _wdt_reset;
 		}
 
 		//
@@ -1128,6 +1162,12 @@ class AVR_CPU : public CPU, Notification {
 			else {
 				_irq_vector = 0x000000;
 			}
+			//
+			//	Reset the WDT timer
+			//
+			_wdt_remaining = 0;
+			_wdt_reset = 0;
+			_wdt_enabled = false;
 		}
 {B}
 		//
@@ -1162,7 +1202,7 @@ class AVR_CPU : public CPU, Notification {
 				//	used by any instruction which sets the _skip_next
 				//	flag gives the correct overall clock count.
 				//
-				_clock->tick( ticks );
+				_clock->tick( ticks, true );
 				//
 				//	We return from here as we have "executed" an
 				//	instruction, albeit just moving the PC and
@@ -1219,7 +1259,7 @@ class AVR_CPU : public CPU, Notification {
 					//	and that IRQ numbers start at 1, so we need to subtract 1
 					//	before calculating the target address.
 					//
-					_clock->tick( push_pc( _irq_vector + ( (dword)( irq - 1 ) << 1 )) + 3 );
+					_clock->tick( push_pc( _irq_vector + ( (dword)( irq - 1 ) << 1 )) + 3, false );
 				}
 			}
 		
@@ -1232,7 +1272,7 @@ class AVR_CPU : public CPU, Notification {
 			opcode = next_opcode();
 			inst = find_instruction( opcode );
 			if(( ticks = inst->execute( opcode, this ))) {
-				_clock->tick( ticks );
+				_clock->tick( ticks, true );
 			}
 			else {
 				_reporter->raise( Error_Level, CPU_Module, Unsupported_Instruction, opcode );
@@ -1421,6 +1461,10 @@ class AVR_CPU : public CPU, Notification {
 					_mcusr = value & mask_MCUSR;
 					break;
 				}
+				case WDTCSR: {
+					_wdtcsr = value;
+					break;
+				}
 				default: {
 					ABORT();
 					break;
@@ -1428,6 +1472,22 @@ class AVR_CPU : public CPU, Notification {
 			}
 		}
 {B}
+
+		//
+		//	Clock Ticking API
+		//	=================
+		//
+		virtual void tick( word id, bool inst_end );
+{BS}
+		void AVR_CPU::tick( word id, UNUSED( bool inst_end )) {
+			ASSERT( id == WDT_Clock );
+			//
+			//	We are only tracking clock ticks here because
+			//	the watch dog timer counts ticks.
+			//
+		}
+{B}
+
 
 };
 {B}

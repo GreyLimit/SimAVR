@@ -36,6 +36,9 @@
 #include "Timer.h"
 #include "DeviceRegister.h"
 #include "BreakPoint.h"
+#include "Pin.h"
+#include "AnalogueConversion.h"
+#include "Port.h"
 
 
 //
@@ -60,8 +63,6 @@ static CPU *atmega328p( Reporter *channel, const char *load, Fuses *fuses ) {
 						//
 						firmware->load_hex( load );
 
-	Clock		*crystal	= new ClockFrequency< 32 >( 16000 );
-
 					//
 					//	Create specific memory map for the IO ports.
 					//	This will include both "normal" IO ports (with
@@ -72,11 +73,12 @@ static CPU *atmega328p( Reporter *channel, const char *load, Fuses *fuses ) {
 					//	needs to be used to convert the DS address to
 					//	one of the extended IO port numbers.
 					//
-	Memory		*ports		= new MapSegments< 1 >( channel );
+	Memory		*ports		= new MapSegments< 1 >( channel, 224 );
 						//
 						//	"Special" CPU Registers that are located
 						//	in the port address space.
 						//
+						ports->segment( new DeviceRegister( (Notification *)processor, AVR_CPU::WDTCSR ), EXT_IO( 0x60 ));
 						ports->segment( new DeviceRegister( (Notification *)processor, AVR_CPU::SREG ), 0x3F );
 						ports->segment( new DeviceRegister( (Notification *)processor, AVR_CPU::SPH ), 0x3E );
 						ports->segment( new DeviceRegister( (Notification *)processor, AVR_CPU::SPL ), 0x3D );
@@ -87,6 +89,14 @@ static CPU *atmega328p( Reporter *channel, const char *load, Fuses *fuses ) {
 						ports->segment( new DeviceRegister( (Notification *)processor, AVR_CPU::RAMD ), 0x38 );
 						ports->segment( new DeviceRegister( (Notification *)processor, AVR_CPU::MCUCR ), 0x35 );
 						ports->segment( new DeviceRegister( (Notification *)processor, AVR_CPU::MCUSR ), 0x34 );
+
+	Clock		*crystal	= new Clock( channel, 16000 );
+						//
+						//	The processor see a WDT clock at 128 KHz, but does
+						//	not need to see any other clock input.
+						//
+						ports->segment( new DeviceRegister( (Notification *)crystal, Clock::CLKPR ), EXT_IO( 0x61 ));
+						crystal->add( AVR_CPU::WDT_Clock, (Tick *)processor, 128 );
 
 					//
 					//	Timer 0, the first 8 bit timer.
@@ -103,7 +113,7 @@ static CPU *atmega328p( Reporter *channel, const char *load, Fuses *fuses ) {
 						ports->segment( new DeviceRegister( (Notification *)timer0, Timer::TCCRnB ), 0x25 );
 						ports->segment( new DeviceRegister( (Notification *)timer0, Timer::TCCRnA ), 0x24 );
 						ports->segment( new DeviceRegister( (Notification *)timer0, Timer::TIFRn ), 0x15 );
-						crystal->add( timer0 );
+						crystal->add( Timer::System_Clock, timer0 );
 
 					//
 					//	Timer 1, the 16 bit timer.
@@ -127,7 +137,7 @@ static CPU *atmega328p( Reporter *channel, const char *load, Fuses *fuses ) {
 						ports->segment( new DeviceRegister( (Notification *)timer1, Timer::TCCRnA ), EXT_IO( 0x80 ));
 						ports->segment( new DeviceRegister( (Notification *)timer1, Timer::TIMSKn ), EXT_IO( 0x6F ));
 						ports->segment( new DeviceRegister( (Notification *)timer1, Timer::TIFRn ), 0x16 );
-						crystal->add( timer1 );
+						crystal->add( Timer::System_Clock, timer1 );
 	
 					//
 					//	Timer 2, the second 8 bit timer.
@@ -144,7 +154,7 @@ static CPU *atmega328p( Reporter *channel, const char *load, Fuses *fuses ) {
 						ports->segment( new DeviceRegister( (Notification *)timer2, Timer::TCCRnA ), EXT_IO( 0xB0 ));
 						ports->segment( new DeviceRegister( (Notification *)timer2, Timer::TIMSKn ), EXT_IO( 0x70 ));
 						ports->segment( new DeviceRegister( (Notification *)timer2, Timer::TIFRn ), 0x17 );
-						crystal->add( timer2 );
+						crystal->add( Timer::System_Clock, timer2 );
 					//
 					//	The Flash (Re)Programming Device.
 					//
@@ -152,17 +162,32 @@ static CPU *atmega328p( Reporter *channel, const char *load, Fuses *fuses ) {
 					//
 	Programmer	*programmer	= new ProgrammerDevice< 0, 26 >( channel, firmware, processor, handler, crystal, fuses );
 						ports->segment( new DeviceRegister( (Notification *)programmer, Programmer::SPMCSR ), 0x37 );
-						crystal->add( programmer );
+						crystal->add( Programmer::System_Clock, programmer );
 
-	Memory		*data		= new MapSegments< 0 >( channel );
-						data->segment( ports, 0x0020 );
-
+					//
+					//	Define the CPU registers as a small piece of memory.
+					//
 	Memory		*regs		= new SRAM< 32 >( channel );
-						data->segment( regs, 0x0000 );
-					
+
+					//
+					//	Finally create and include the program data space itself.
+					//
 	Memory		*sram		= new SRAM< 2048 >( channel );
-						data->segment( sram, 0x0200 );
-								
+
+					//
+					//	Create the "Data Space" address map that the
+					//	register, port and SRAM will be mapped into.
+					//
+	Memory		*data		= new MapSegments< 0 >( channel, 0x0100 + 2048 );
+						//
+						//	The other areas into the data address space.
+						//
+						data->segment( regs,  0x0000 );
+						data->segment( ports, 0x0020 );
+						data->segment( sram,  0x0100 );
+	//
+	//	Bring all the pieces together in the CPU object.
+	//							
 	processor->construct(	AVRxt_Inst,	// Modern basic instructions
 				14,		// Program Address size (bits)
 				firmware,	
@@ -278,10 +303,38 @@ int main( int argc, char* argv[]) {
 			}
 			case 't': {
 				//
-				//	Like run, but trace/display instructions as they run.
+				//	Trace instructions.  Like rujn but displays instructions
+				//	as they are about to be executed.
 				//
+				bool	counter;
+				int	left, count, n;
+
+				counter = (( left = ( count = atoi( inst+1 ))) > 0 );
+				while( true ) {
+					simulate->step();
+					if(( n = breaks->check( simulate->next_instruction())) != 0 ) {
+						printf( "Break point %d.\n", n );
+						break;
+					}
+					if( counter ) {
+						if( --count == 0 ) break;
+						if( channel->exception()) {
+							printf( "Exception after %d instructions.\n", count - left );
+							break;
+						}
+					}
+					else {
+						if( channel->exception()) {
+							printf( "Exception stops execution.\n" );
+							break;
+						}
+					}
+					pc = simulate->next_instruction();
+					len = simulate->disassemble( pc, labels, inst, BUFFER );
+					printf( "%s: %s\n", labels->expand( program_address, pc, adrs, BUFFER ), inst );
+				}
 				break;
-			}	
+			}
 			case 'd': {
 				//
 				//	Disassemble a number of instructions.

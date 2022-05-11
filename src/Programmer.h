@@ -93,6 +93,11 @@ class Programmer : public Tick, Notification {
 		//	when communicating updates to the control register.
 		//
 		static const word SPMCSR = 0;
+
+		//
+		//	Handle for the system clock.
+		//
+		static const word System_Clock = 0;
 		
 	public:
 		//
@@ -124,7 +129,7 @@ class Programmer : public Tick, Notification {
 		//	simulate activities happening in parallel
 		//	while other tasks are executing.
 		//
-		virtual void tick( void ) = 0;
+		virtual void tick( word id, bool inst_end ) = 0;
 
 		//
 		//	Notification API
@@ -219,7 +224,7 @@ template< word instance, byte irq_number > class ProgrammerDevice : public Progr
 		//
 		//	Define the SPM clock window counter.
 		//
-		word		_action_counter,
+		word		_action_counter,	_action_counter_pending,
 				_parallel_counter;
 				
 		//
@@ -236,7 +241,7 @@ template< word instance, byte irq_number > class ProgrammerDevice : public Progr
 					//	SIGRD: Read signature byte
 					//
 					_pm_mode = PM_SIGRD;
-					_action_counter = 3;
+					_action_counter_pending = 3;
 					break;
 				}
 				case bit_RWWSRE | bit_SPMEN: {
@@ -244,7 +249,7 @@ template< word instance, byte irq_number > class ProgrammerDevice : public Progr
 					//	RWWSRE: Read-While-Write Section Read Enable.
 					//
 					_pm_mode = PM_RWWSRE;
-					_action_counter = 4;
+					_action_counter_pending = 4;
 					break;
 				}
 				case bit_BLBSET | bit_SPMEN: {
@@ -252,7 +257,7 @@ template< word instance, byte irq_number > class ProgrammerDevice : public Progr
 					//	BLBSET: Boot Lock Bit Set
 					//
 					_pm_mode = PM_BLBSET;
-					_action_counter = 4;
+					_action_counter_pending = 4;
 					break;
 				}
 				case bit_PGWRT | bit_SPMEN: {
@@ -260,7 +265,7 @@ template< word instance, byte irq_number > class ProgrammerDevice : public Progr
 					//	PGWRT: Page Write
 					//
 					_pm_mode = PM_PGWRT;
-					_action_counter = 4;
+					_action_counter_pending = 4;
 					break;
 				}
 				case bit_PGERS | bit_SPMEN: {
@@ -268,7 +273,7 @@ template< word instance, byte irq_number > class ProgrammerDevice : public Progr
 					//	PGERS: Page Erase
 					//
 					_pm_mode = PM_PGERS;
-					_action_counter = 4;
+					_action_counter_pending = 4;
 					break;
 				}
 				case bit_SPMEN: {
@@ -276,7 +281,7 @@ template< word instance, byte irq_number > class ProgrammerDevice : public Progr
 					//	SPMEN: Write to flash buffer page
 					//
 					_pm_mode = PM_SPMEN;
-					_action_counter = 4;
+					_action_counter_pending = 4;
 					break;
 				}
 				default: {
@@ -286,7 +291,7 @@ template< word instance, byte irq_number > class ProgrammerDevice : public Progr
 					//
 					_report->raise( Error_Level, Programmer_Module, Parameter_Invalid, value );
 					_pm_mode = PM_EMPTY;
-					_action_counter = 0;
+					_action_counter_pending = 0;
 					break;
 				}
 			}
@@ -333,6 +338,7 @@ template< word instance, byte irq_number > class ProgrammerDevice : public Progr
 			//	Clear count down timers.
 			//
 			_action_counter = 0;
+			_action_counter_pending = 0;
 			_parallel_counter = 0;
 			//
 			//	Import our Lock and Fuse based configuration.
@@ -442,7 +448,7 @@ template< word instance, byte irq_number > class ProgrammerDevice : public Progr
 			//	This is the test to see if this code
 			//	is going to hijack the LPM instruction.
 			//
-			if( !_action_counter ) return( 0 );
+			if( _action_counter == 0 ) return( 0 );
 			//
 			//	Clear to ensure only activated once.
 			//
@@ -474,11 +480,29 @@ template< word instance, byte irq_number > class ProgrammerDevice : public Progr
 		//	simulate activities happening in parallel
 		//	while other tasks are executing.
 		//
-		virtual void tick( void ) {
+		virtual void tick( word id, bool inst_end ) {
+			ASSERT( id == 0 );
 			//
-			//	Reduce count down timers, take actions as appropriate.
+			//	Count down controlling the semantics of the
+			//	LPM and SPM instructions
 			//
-			if( _action_counter ) if(( _action_counter -= 1 ) == 0 ) _spmcsr &= ~control_mask;
+			if( _action_counter_pending ) {
+				if( inst_end ) {
+					_action_counter = _action_counter_pending;
+					_action_counter_pending = 0;
+				}
+			}
+			else {
+				if( _action_counter ) {
+					if(( _action_counter -= 1 ) == 0 ) {
+						_spmcsr &= ~control_mask;
+					}
+				}
+			}
+			//
+			//	Counter timing the point at which flash is
+			//	written.
+			//	
 			if( _parallel_counter ) {
 				if(( _parallel_counter -= 1 ) == 0 ) {
 					_flash->commit();

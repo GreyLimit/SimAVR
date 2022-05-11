@@ -43,9 +43,12 @@ class Memory {
 
 		//
 		//	Provide the entry point for mapping memory segments
-		//	but default it to failing
+		//	but default it to failing.  Also provide a mechanism
+		//	for the mapping module to tell a 'mapped in' segment
+		//	how far its base address has moved (from an initial 0).
 		//
 		virtual bool segment( Memory *handler, word adrs ) { ABORT(); return( false ); }
+		virtual void shifted( word offset ) { return; }
 };	
 
 #endif

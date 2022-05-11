@@ -15,6 +15,8 @@
 //
 #include "Base.h"
 #include "Validation.h"
+#include "DeviceRegister.h"
+#include "Reporter.h"
 #include "mul_div.h"
 
 //
@@ -27,70 +29,69 @@ class Tick {
 		//	Called once for every tick which the
 		//	clock is simulating.
 		//
-		virtual void tick( void ) = 0;
+		//	'handle' gives identifier used when the
+		//	tick interface was registered with the clock.
+		//
+		//	'inst_end' is true if the clock pulse represents
+		//	the last tick of an instruction.
+		//
+		virtual void tick( word handle, bool inst_end ) = 0;
 };
 
-//
-//	Clock API class
-//
-class Clock {
-	public:
-		//
-		//	Add a new target to the clock.
-		//
-		virtual bool add( Tick *dev ) = 0;
-
-		//
-		//	Call with the number of ticks which
-		//	are supposed to be simulated.
-		//
-		virtual void tick( word count ) = 0;
-		
-		//
-		//	Call to convert a number of milliseconds
-		//	into a corresponding number of clock
-		//	ticks.
-		//
-		//	Due to the types used in this class (at the
-		//	moment) this is ultimately limited to a
-		//	fairly small duration (depending on the
-		//	clock speed being simulated).
-		//
-		virtual word millis( word duration ) = 0;
-		
-		//
-		//	As above, but for microseconds.
-		//
-		virtual word micros( word duration ) = 0;
-
-		//
-		//	Return how many ticks we have handled.
-		//
-		virtual dword count( void ) = 0;
-};
 
 //
 //	The Clock implementation
 //
-template< word targets> class ClockFrequency : public Clock {
+class Clock : public Notification {
+	public:
+		//
+		//	This is the handle of the device register access
+		//	the clock supports.
+		//
+		static const word CLKPR = 0;
+		//
+		//	bit/field access.
+		//
+		static const byte bit_CLKPCE = BIT( byte, 7 );
+		static const byte size_CLKPS = 4;
+		static const byte lsb_size_CLKPS = 0;
+		static const byte mask_CLKPS = MASK( byte, size_CLKPS );
+		
 	private:
 		//
-		//	Define an array of Tick objects we
-		//	need to propergate to.
+		//	Where we send reports.
 		//
-		Tick	*_target[ targets ];
+		Reporter	*_report;
+		
 		//
-		//	How many defined so far?
+		//	The Clock pre-scale register
 		//
-		word	_targets;
+		byte		_clkpr;
+		
+		//
+		//	Define the data we need to manage each
+		//	object receiving a clock tick.
+		//
+		struct ticking {
+			Tick	*target;
+			word	handle,
+				interval,
+				remaining;
+			ticking	*next;
+		};
+
+		//
+		//	This is the array of ticking targets.
+		//
+		ticking		*_list;
 		
 		//
 		//	Clock speed in KHz, and the practical
 		//	largest millisecond duration we can
 		//	handle.
 		//
-		word	_khs,
-			_max;
+		word		_khz,
+				_max;
 
 		//
 		//	Keep track of ticks as they go by.
@@ -108,24 +109,52 @@ template< word targets> class ClockFrequency : public Clock {
 		//	in KHz.  This limits the "top speed" of the clock
 		//	to ~65MHz, which is faster than most MCUs.
 		//
-		ClockFrequency( word khz ) {
+		Clock( Reporter *report, word khz ) {
 			//
+			//	Reporting to..
+			//
+			_report = report;
+			//
+			//	Start pre-scaler empty.
+			//
+			_clkpr = 0;
+			//
+			//	Start with an empty list.
 			//	
-			_targets = 0;
+			_list = NULL;
+			//
+			//	Our 'real world' clock counter
+			//	
 			_count = 0;
 			//
 			//	Save clock speed and pertinent limits.
 			//
-			_khs = khz;
-			_max = 0xFFFF / _khs;
+			_khz = khz;
+			_max = 0xFFFF / _khz;
 		}
 
 		//
 		//	Add a new target to the clock.
 		//
-		virtual bool add( Tick *dev ) {
-			if( _targets >= targets ) return( false );
-			_target[ _targets++ ] = dev;
+		virtual bool add( word id, Tick *dev ) {
+			return( add( id, dev, _khz ));
+		}
+		virtual bool add( word id, Tick *dev, word khz ) {
+			ticking	*p;
+			
+			//
+			//	Set up new target
+			//
+			p = new ticking;
+			p->target = dev;
+			p->handle = id;
+			if(( p->interval = _khz / khz ) == 0 ) {
+				_report->raise( Warning_Level, Clock_Module, Too_Fast, khz );
+				p->interval = 1;
+			}
+			p->remaining = p->interval;
+			p->next = _list;
+			_list = p;
 			return( true );
 		}
 
@@ -133,10 +162,23 @@ template< word targets> class ClockFrequency : public Clock {
 		//	Call with the number of ticks which
 		//	are supposed to be simulated.
 		//
-		virtual void tick( word count ) {
+		//	set 'has_end' to true if the call
+		//	should emit 'inst_end' as true one
+		//	the last tick.
+		//
+		virtual void tick( word count, bool has_end ) {
+			//
+			//	Loop through the number of ticks we should be
+			//	simulating. 
+			//
 			while( count-- ) {
 				_count++;
-				for( word i = 0; i < _targets; _target[ i++ ]->tick());
+				for( ticking *p = _list; p != NULL; p = p->next ) {
+					if(( p->remaining -= 1 ) == 0 ) {
+						p->remaining = p->interval;
+						p->target->tick( p->handle, (( count == 0 ) && has_end ));
+					}
+				}
 			}
 		}
 		
@@ -145,14 +187,14 @@ template< word targets> class ClockFrequency : public Clock {
 		//
 		virtual word millis( word duration ) {
 			ASSERT( duration <= _max );
-			return( duration * _khs );
+			return( duration * _khz );
 		}
 
 		//
 		//	Convert us to clock ticks.
 		//
 		virtual word micros( word duration ) {
-			return( mul_div<word>( duration, _khs, 1000 ));
+			return( mul_div<word>( duration, _khz, 1000 ));
 		}
 
 		//
@@ -160,6 +202,30 @@ template< word targets> class ClockFrequency : public Clock {
 		//
 		virtual dword count( void ) {
 			return( _count );
+		}
+
+		//
+		//	Device register notification API
+		//
+		virtual byte read_register( word id ) {
+			ASSERT( id == CLKPR );
+			return( _clkpr );
+		}
+		virtual void write_register( word id, byte value ) {
+			ASSERT( id == size_CLKPS );
+			if( value == bit_CLKPCE ) {
+				_clkpr = bit_CLKPCE;
+				return;
+			}
+			if(( value & ~mask_CLKPS ) != 0 ) {
+				_report->raise( Warning_Level, Clock_Module, Parameter_Invalid, value );
+				value &= mask_CLKPS;
+			}
+			if( _clkpr != bit_CLKPCE ) {
+				_report->raise( Warning_Level, Clock_Module, Read_Only, _clkpr );
+				return;
+			}
+			_clkpr = value;
 		}
 };
 

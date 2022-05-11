@@ -30,6 +30,7 @@ static ModuleName modules[] = {
 	{ Fuse_Module,		"Fuse"			},
 	{ Symbols_Module,	"Symbols_Module"	},
 	{ Timer_Module,		"Timer_Module"		},
+	{ Pin_Module,		"Pin_Module"		},
 	{ Application_Module,	"Application"		}
 };
 
@@ -104,10 +105,11 @@ static ExceptionName exceptions[] = {
 	{ Address_Wraps,		"Address wraps"		},
 	
 	{ Not_Supported,		"Not supported"		},
-	{ Ticker_Full,			"Ticker table full"	},
 	{ Invalid_Identifier,		"Identifier invalid"	},
 	{ Invalid_Number,		"Number format invalid"	},
 	{ Overlap_Error,		"Objects Overlap"	},
+	{ Too_Fast,			"Sub clock too quick"	},
+	
 	{ Config_Change,		"Config Change"		},
 		
 	{ Address_OOR,			"Address OOR"		},
@@ -117,6 +119,7 @@ static ExceptionName exceptions[] = {
 	{ Destination_OOR,		"destination OOR"	},
 	{ Interrupt_OOR,		"Interrupt OOR"		},
 	{ Read_Only,			"Read only"		},
+	{ Read_Invalid,			"Read invalid"		},
 	{ Write_Only,			"Write only"		},
 	{ Write_Invalid,		"Write invalid"		},
 	{ Restore_Invalid,		"Restore invalid"	},

@@ -68,13 +68,18 @@ class Timer : public Tick, Notification {
 		static const word TIMSKn	= 13;
 
 		//
+		//	This is our handle for the system clock.
+		//
+		static const word System_Clock = 0;
+
+		//
 		//	(Clock) Tick API
 		//	================
 		//
 		//	Called once for every tick which the
 		//	clock is simulating.
 		//
-		virtual void tick( void ) = 0;
+		virtual void tick( word id, bool inst_end ) = 0;
 
 		//
 		//	Notification API
@@ -470,7 +475,7 @@ template< int instance, word maximum, byte compa, byte compb, byte ovrf, byte ca
 		//	Called once for every tick which the
 		//	clock is simulating.
 		//
-		virtual void tick( void ) {
+		virtual void tick( UNUSED( word id ), UNUSED( bool end_inst )) {
 			if( _running ) {
 				if( _external ) {
 					//

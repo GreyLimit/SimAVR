@@ -27,6 +27,7 @@ class Map : public Memory {
 		//	===========
 		//
 		virtual bool segment( Memory *block, word adrs ) = 0;
+		virtual void shifted( word offset ) = 0;
 		
 		//
 		//	Memory API
@@ -65,6 +66,17 @@ template< int instance >class MapSegments : public Memory {
 		Reporter	*_report;
 
 		//
+		//	This is default base address of the map.
+		//
+		word		_base;
+
+		//
+		//	This is the pre-defined size of this map
+		//	segment.
+		//
+		word		_size;
+
+		//
 		//	Find the target segment...
 		//
 		component *find( word adrs ) {
@@ -80,9 +92,13 @@ template< int instance >class MapSegments : public Memory {
 		//
 		//	Constructor.
 		//
-		MapSegments( Reporter *handler ) {
+		MapSegments( Reporter *handler, word size ) {
+			ASSERT( size > 0 );
+			
 			_report = handler;
 			_segments = NULL;
+			_base = 0;
+			_size = size;
 		}
 
 		//
@@ -94,6 +110,16 @@ template< int instance >class MapSegments : public Memory {
 			word		z = block->capacity();
 			word		t = adrs + z;
 
+			//
+			//	Verify segment inside map space
+			//
+			if( t > _size ) {
+				_report->raise( Error_Level, Map_Module, Overlap_Error, instance, "New segment extends pas end of map", adrs );
+				return( false );
+			}
+			//
+			//	Search segments to see where this new on fits.
+			//
 			for( a = &_segments; ( p = *a ) != NULL; a = &( p->next )) {
 				if(( adrs < p->base )&&( t <= p->base )) {
 					//
@@ -112,7 +138,7 @@ template< int instance >class MapSegments : public Memory {
 				}
 			}
 			//
-			//	Create and insert a new record at a.
+			//	Create and insert a new record inside a.
 			//
 			p = new component;
 			p->base = adrs;
@@ -120,7 +146,21 @@ template< int instance >class MapSegments : public Memory {
 			p->handler = block;
 			p->next = *a;
 			*a = p;
+			//
+			//	Finally tell it what our base address is
+			//
+			block->shifted( adrs );
+			//
+			//	And confirm success.
+			//
 			return( true );
+		}
+		virtual void shifted( word offset ) {
+			_report->raise( Information_Level, Map_Module, Config_Change, instance, "Base address shifted", offset );
+			_base += offset;
+			for( component	*p = _segments; p != NULL; p = p->next ) {
+				p->handler->shifted( offset );
+			}
 		}
 		
 		//
@@ -131,28 +171,25 @@ template< int instance >class MapSegments : public Memory {
 			component *ptr;
 			
 			if(( ptr = find( adrs ))) return( ptr->handler->read( adrs - ptr->base ));
-			_report->raise( Warning_Level, Map_Module, Address_OOR, instance, "Address not in mapped segment", adrs );
+			_report->raise( Warning_Level, Map_Module, Address_OOR, instance, "Read address not in mapped segment", adrs );
 			return( 0 );
 		}
 		virtual void write( word adrs, byte value ) {
 			component *ptr;
 			
 			if(( ptr = find( adrs ))) return( ptr->handler->write( adrs - ptr->base, value ));
-			_report->raise( Warning_Level, Map_Module, Address_OOR, instance, "Address not in mapped segment", adrs );
+			_report->raise( Warning_Level, Map_Module, Address_OOR, instance, "Write address not in mapped segment", adrs );
 		}
 		virtual byte modify( word adrs, byte clear, byte set, byte toggle ) {
 			component *ptr;
 			
 			if(( ptr = find( adrs ))) return( ptr->handler->modify( adrs - ptr->base, clear, set, toggle ));
-			_report->raise( Warning_Level, Map_Module, Address_OOR, instance, "Address not in mapped segment", adrs );
+			_report->raise( Warning_Level, Map_Module, Address_OOR, instance, "Modify address not in mapped segment", adrs );
 			return( 0 );
 		}
 		virtual word capacity( void ) {
-			component *l;
 			
-			if( _segments == NULL ) return( 0 );
-			for( l = _segments; l->next != NULL; l = l->next );
-			return(( l->base - _segments->base ) + l->size );
+			return( _size );
 		}
 };
 

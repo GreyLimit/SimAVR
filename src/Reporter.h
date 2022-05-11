@@ -29,6 +29,7 @@ typedef enum {
 	Fuse_Module,
 	Symbols_Module,
 	Timer_Module,
+	Pin_Module,
 	Application_Module
 } Modules;
 
@@ -72,10 +73,14 @@ typedef enum {
 	//	Exceptions capturing errors in the simulation
 	//
 	Not_Supported,			// Requested API function not supported.
-	Ticker_Full,			// Failed to register with the clock.
 	Invalid_Identifier,		// Format of identifier name invalid.
 	Invalid_Number,			// Format of number invalid.
 	Overlap_Error,			// Two items overlap in error.
+	Too_Fast,			// Sub clock too quick to simulate.
+
+	//
+	//	Information messages
+	//
 	Config_Change,			// An element of the configuration has changed.
 
 	//
@@ -88,6 +93,7 @@ typedef enum {
 	Destination_OOR,
 	Interrupt_OOR,
 	Read_Only,
+	Read_Invalid,
 	Write_Only,
 	Write_Invalid,			// Write operation not valid (writing to locked section).
 	Restore_Invalid,		// Typically 'undoing' a programmed lock/fuse (ie 0 -> 1 )
