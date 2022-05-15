@@ -13,6 +13,7 @@ conditions are met.
 
 Speed of simulation is not the primary goal.
 
+## Status
 
 Soooo .. been working on this for a while now.  This seems to have reached critical mass
 now whereinteresting things are happenning.  It's also reached the point where I need to
