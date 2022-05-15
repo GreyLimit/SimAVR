@@ -3,6 +3,8 @@
 //
 
 #include <stdio.h>
+#include <signal.h>
+
 
 //
 //	Include Simulator Header files so that they are
@@ -39,6 +41,17 @@
 #include "Pin.h"
 #include "AnalogueConversion.h"
 #include "Port.h"
+#include "SerialComms.h"
+#include "Coverage.h"
+
+
+//
+//	Routine to catch Ctrl-C
+//
+static volatile bool keep_running = true;
+static void Ctrl_C( int dummy ) {
+	keep_running = false;
+}
 
 
 //
@@ -48,10 +61,8 @@
 //
 #define EXT_IO(n)	((n)-0x20)
 
-static CPU *atmega328p( Reporter *channel, const char *load, Fuses *fuses ) {
+static CPU *atmega328p( Reporter *channel, Coverage *tracker, const char *load, Fuses *fuses ) {
 	
-	AVR_CPU		*processor	= new AVR_CPU();
-
 					//
 					//	Declare an interrupt manager for IRQs 1 through to 26.
 					//
@@ -74,6 +85,44 @@ static CPU *atmega328p( Reporter *channel, const char *load, Fuses *fuses ) {
 					//	one of the extended IO port numbers.
 					//
 	Memory		*ports		= new MapSegments< 1 >( channel, 224 );
+
+	Port		*portb		= new PortDevice< 1 >( channel );
+						//
+						//	Add in bits of IO
+						//
+						portb->attach( new Pin( channel, 0 ), 0 );
+						portb->attach( new Pin( channel, 15 ), 1 );
+						portb->attach( new Pin( channel, 16 ), 2 );
+						portb->attach( new Pin( channel, 17 ), 3 );
+						portb->attach( new Pin( channel, 18 ), 4 );
+						portb->attach( new Pin( channel, 19 ), 5 );
+						portb->attach( new Pin( channel, 9 ), 6 );
+						portb->attach( new Pin( channel, 10 ), 7 );
+						ports->segment( new DeviceRegister( portb, Port::PORTn ), 0x05 );
+						ports->segment( new DeviceRegister( portb, Port::DDRn ), 0x04 );
+						ports->segment( new DeviceRegister( portb, Port::PINn ), 0x03 );
+
+					//
+					//	Build the ADC system
+					//
+	AnalogueConversion *adc		= new AnalogueConversion( channel );
+						ports->segment( new DeviceRegister( adc, AnalogueConversion::ADCSRA ), EXT_IO( 0x7A ));
+
+					//
+					//	The USART
+					//
+	SerialComms *serial		= new SerialComms( channel );
+						ports->segment( new DeviceRegister( serial, SerialComms::UDRn ), EXT_IO( 0xC6 ));
+						ports->segment( new DeviceRegister( serial, SerialComms::UBRRnH ), EXT_IO( 0xC5 ));
+						ports->segment( new DeviceRegister( serial, SerialComms::UBRRnL ), EXT_IO( 0xC4 ));
+						ports->segment( new DeviceRegister( serial, SerialComms::UCSRnC ), EXT_IO( 0xC2 ));
+						ports->segment( new DeviceRegister( serial, SerialComms::UCSRnB ), EXT_IO( 0xC1 ));
+						ports->segment( new DeviceRegister( serial, SerialComms::UCSRnA ), EXT_IO( 0xC0 ));
+
+					//
+					//	Declare the processor core.
+					//
+	AVR_CPU		*processor	= new AVR_CPU();
 						//
 						//	"Special" CPU Registers that are located
 						//	in the port address space.
@@ -198,19 +247,21 @@ static CPU *atmega328p( Reporter *channel, const char *load, Fuses *fuses ) {
 				ports,
 				handler,
 				crystal,
+				tracker,
 				channel );
 
 	return( processor );
 }
 
-#define BUFFER 128
+#define LIST	32
+#define BUFFER	128
 
 int main( int argc, char* argv[]) {
 	char	*hex;
 	
 	Reporter *channel	= new Console;
-	Symbols *labels		= new Symbols( channel );
-	Fuses *fuses		= new Fuses_328( channel, AVR_ATmega328P );
+	Symbols	*labels		= new Symbols( channel );
+	Fuses	*fuses		= new Fuses_328( channel, AVR_ATmega328P );
 
 	hex = NULL;
 	for( int a = 1; a < argc; a++ ) {
@@ -244,26 +295,34 @@ int main( int argc, char* argv[]) {
 		}
 	}
 	
-	CPU		*simulate	= atmega328p( channel, hex, fuses );
 	BreakPoint	*breaks		= new BreakPoint();
+	Coverage	*tracker	= new Coverage( channel );
+	CPU		*simulate	= atmega328p( channel, tracker, hex, fuses );
 
+	//
+	//	Prepare to catch Ctrl-C
+	//
+	signal( SIGINT, Ctrl_C );
+	
 	while( true ) {
 		char	adrs[ BUFFER ],
-			inst[ BUFFER ];
+			inst[ BUFFER ],
+			*dec;
 		
 		dword	pc	= simulate->next_instruction();
 		word	len	= simulate->disassemble( pc, labels, inst, BUFFER );
-		
-		printf( "%s: %s\n", labels->expand( program_address, pc, adrs, BUFFER ), inst );
 
+		printf( "%s: %s\n", labels->expand( program_address, pc, adrs, BUFFER ), inst );
 		printf( "> " );
 		fflush( stdout );
 		
 		if( fgets( inst, BUFFER, stdin ) == NULL ) break;
+		keep_running = true;
 
 		inst[ strlen( inst )-1 ] = EOS;
+		dec = inst;
 		
-		switch( *inst ) {
+		switch( *dec++ ) {
 			case EOS: {
 				//
 				//	Single step on just pressing enter.
@@ -278,8 +337,8 @@ int main( int argc, char* argv[]) {
 				bool	counter;
 				int	left, count, n;
 
-				counter = (( left = ( count = atoi( inst+1 ))) > 0 );
-				while( true ) {
+				counter = (( left = ( count = atoi( dec ))) > 0 );
+				while( keep_running ) {
 					simulate->step();
 					if(( n = breaks->check( simulate->next_instruction())) != 0 ) {
 						printf( "Break point %d.\n", n );
@@ -309,8 +368,8 @@ int main( int argc, char* argv[]) {
 				bool	counter;
 				int	left, count, n;
 
-				counter = (( left = ( count = atoi( inst+1 ))) > 0 );
-				while( true ) {
+				counter = (( left = ( count = atoi( dec ))) > 0 );
+				while( keep_running ) {
 					simulate->step();
 					if(( n = breaks->check( simulate->next_instruction())) != 0 ) {
 						printf( "Break point %d.\n", n );
@@ -343,7 +402,7 @@ int main( int argc, char* argv[]) {
 				int	c;
 				char	*at;
 
-				if(( at = strchr( inst+1, '@' )) != NULL ) {
+				if(( at = strchr( dec, '@' )) != NULL ) {
 					*at++ = EOS;
 					if( !labels->evaluate( program_address, at, &a )) {
 						printf( "Start address not recognised.\n" );
@@ -353,7 +412,7 @@ int main( int argc, char* argv[]) {
 				else {
 					a = pc;
 				}
-				if(( c = atoi( inst+1 )) == 0 ) c = 1;
+				if(( c = atoi( dec )) == 0 ) c = 1;
 				while( c-- ) {
 					word len = simulate->disassemble( a, labels, inst, BUFFER );
 					printf( "%s: %s\n", labels->expand( program_address, a, adrs, BUFFER ), inst );
@@ -365,7 +424,7 @@ int main( int argc, char* argv[]) {
 				//
 				//	Write out the symbol table to a file.
 				//
-				if( !labels->save_symbols( inst+1 )) {
+				if( !labels->save_symbols( dec )) {
 					printf( "Failed to write to file '%s'.\n", inst+1 );
 				}
 				else {
@@ -380,7 +439,7 @@ int main( int argc, char* argv[]) {
 				word	n;
 				dword	a;
 
-				if( labels->evaluate( program_address, inst+1, &a )) {
+				if( labels->evaluate( program_address, dec, &a )) {
 					if(( n = breaks->add( a )) == 0 ) {
 						printf( "Unable to add new breakpoint.\n" );
 					}
@@ -394,7 +453,7 @@ int main( int argc, char* argv[]) {
 				//
 				//	Remove a break point
 				//
-				word n = atoi( inst+1 );
+				word n = atoi( dec );
 
 				if( !breaks->remove( n )) {
 					printf( "Invalid breakpoint %d.\n", n );
@@ -402,14 +461,107 @@ int main( int argc, char* argv[]) {
 				break;
 			}
 			case '?': {
-				word	r;
-				
-				//
-				//	Display status of the CPU.
-				//
-				r = 0;
-				while( simulate->show_register( labels, r++, inst, BUFFER )) printf( "%15s%c", inst, (( r & 3 )? '\t': '\n' ));
-				printf( "%15s\n", inst );
+				switch( *dec++ ) {
+					case 'v': {
+						word	r;
+
+						//
+						//	Display Symbols by value.
+						//
+						r = 0;
+						while( labels->show_symbol( r++, false, inst, BUFFER )) printf( "%s\n", inst );
+						break;
+					}
+					case 's': {
+						word	r;
+
+						//
+						//	Display Symbols by name.
+						//
+						r = 0;
+						while( labels->show_symbol( r++, true, inst, BUFFER )) printf( "%s\n", inst );
+						break;
+					}
+					case 'r': {
+						word	r;
+
+						//
+						//	Display registers of the CPU.
+						//
+						if( *dec == EOS ) {
+							r = 0;
+							while( simulate->examine( Register_Address, r++, labels, inst, BUFFER )) printf( "%15s%c", inst, (( r & 3 )? '\t': '\n' ));
+							printf( "\n" );
+						}
+						else {
+							dword	d;
+							
+							if( labels->evaluate( byte_register, dec, &d )) {
+								r = d;
+								if( simulate->examine( Register_Address, r, labels, inst, BUFFER )) {
+									printf( "%s\n", inst );
+								}
+								else {
+									printf( "Register %d unrecognised.\n", r );
+								}
+							}
+						}
+						break;
+					}
+					case 'p': {
+						word	p;
+
+						//
+						//	Display Port registers.
+						//
+						if( *dec == EOS ) {
+							p = 0;
+							while( simulate->examine( Port_Address, p++, labels, inst, BUFFER )) printf( "%15s%c", inst, (( p & 3 )? '\t': '\n' ));
+							printf( "\n" );
+						}
+						else {
+							dword	d;
+							
+							if( labels->evaluate( port_number, dec, &d )) {
+								p = d;
+								if( simulate->examine( Port_Address, p, labels, inst, BUFFER )) {
+									printf( "%s\n", inst );
+								}
+								else {
+									printf( "Port %d unrecognised.\n", p );
+								}
+							}
+						}
+						break;
+					}
+					case 'b': {
+						//
+						//	Breakpoints
+						//
+						int	id[ LIST ],
+							count;
+							
+						if(( count = breaks->list( id, LIST ))) {
+							printf( "Break points:\n" );
+							for( int i = 0; i < count; i++ ) printf( "\t%d @ %s\n", id[ i ], labels->expand( program_address, breaks->address( id[ i ]), inst, BUFFER ));
+						}
+						else {
+							printf( "No breaks set.\n" );
+						}
+						break;
+					}
+					case 'c': {
+						//
+						//	Coverage data.
+						//
+						tracker->dump( stdout );
+						break;
+					}
+					default: {
+						printf( "Help display not written yet.\n" );
+						break;
+					}
+				}
 				break;
 			}
 			default: {

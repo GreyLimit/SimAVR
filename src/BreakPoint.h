@@ -60,7 +60,12 @@ class BreakPoint {
 			breakpoint *p;
 			
 			for( p = _active; p != NULL; p = p->next ) if( adrs == p->address ) return( p->index );
-			p = new breakpoint;
+			if(( p = _inactive )) {
+				_inactive = _inactive->next;
+			}
+			else {
+				p = new breakpoint;
+			}
 			p->index = _next++;
 			p->address = adrs;
 			p->next = _active;

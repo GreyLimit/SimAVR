@@ -29,6 +29,11 @@ class Notification {
 		//
 		virtual byte read_register( word id ) = 0;
 		virtual void write_register( word id, byte value ) = 0;
+		//
+		//	Mechanism for examining content outside the
+		//	framework of the simulation.
+		//
+		virtual bool examine( word id, Symbols *labels, char *buffer, int max ) = 0;
 };
 
 //
@@ -45,9 +50,11 @@ class DeviceRegister : public Memory {
 		Notification	*_control;
 
 		//
-		//	Keep copy of our internal identification.
+		//	Keep copy of our internal identification,
+		//	and real world offset.
 		//
-		word		_id;
+		word		_id,
+				_shift;
 				
 	public:
 		//
@@ -57,6 +64,7 @@ class DeviceRegister : public Memory {
 		DeviceRegister( Notification *supervisor, word id ) {
 			_control = supervisor;
 			_id = id;
+			_shift = 0;
 		}
 		//
 		//	Simple read or write actions
@@ -93,6 +101,14 @@ class DeviceRegister : public Memory {
 		//
 		virtual word capacity( void ) {
 			return( 1 );
+		}
+
+		//
+		//	Mechanism for examining content outside the
+		//	framework of the simulation.
+		//
+		virtual bool examine( word adrs, Symbols *labels, char *buffer, int max ) {
+			return( _control->examine( _id, labels, buffer, max ));
 		}
 };	
 

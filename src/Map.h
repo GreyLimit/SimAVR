@@ -23,13 +23,6 @@
 class Map : public Memory {
 	public:
 		//
-		//	The Map API
-		//	===========
-		//
-		virtual bool segment( Memory *block, word adrs ) = 0;
-		virtual void shifted( word offset ) = 0;
-		
-		//
 		//	Memory API
 		//	==========
 		//
@@ -37,6 +30,9 @@ class Map : public Memory {
 		virtual void write( word adrs, byte value ) = 0;
 		virtual byte modify( word adrs, byte clear, byte set, byte toggle ) = 0;
 		virtual word capacity( void ) = 0;
+		virtual bool segment( Memory *handler, word adrs ) = 0;
+		virtual void shifted( word offset ) = 0;
+		virtual bool examine( word adrs, Symbols *labels, char *buffer, int max ) = 0;
 };
 
 
@@ -155,6 +151,7 @@ template< int instance >class MapSegments : public Memory {
 			//
 			return( true );
 		}
+
 		virtual void shifted( word offset ) {
 			_report->raise( Information_Level, Map_Module, Config_Change, instance, "Base address shifted", offset );
 			_base += offset;
@@ -163,10 +160,6 @@ template< int instance >class MapSegments : public Memory {
 			}
 		}
 		
-		//
-		//	Class Memory
-		//	------------
-		//
 		virtual byte read( word adrs ) {
 			component *ptr;
 			
@@ -174,12 +167,14 @@ template< int instance >class MapSegments : public Memory {
 			_report->raise( Warning_Level, Map_Module, Address_OOR, instance, "Read address not in mapped segment", adrs );
 			return( 0 );
 		}
+		
 		virtual void write( word adrs, byte value ) {
 			component *ptr;
 			
 			if(( ptr = find( adrs ))) return( ptr->handler->write( adrs - ptr->base, value ));
 			_report->raise( Warning_Level, Map_Module, Address_OOR, instance, "Write address not in mapped segment", adrs );
 		}
+		
 		virtual byte modify( word adrs, byte clear, byte set, byte toggle ) {
 			component *ptr;
 			
@@ -187,9 +182,18 @@ template< int instance >class MapSegments : public Memory {
 			_report->raise( Warning_Level, Map_Module, Address_OOR, instance, "Modify address not in mapped segment", adrs );
 			return( 0 );
 		}
+		
 		virtual word capacity( void ) {
 			
 			return( _size );
+		}
+		
+		virtual bool examine( word adrs, Symbols *labels, char *buffer, int max ) {
+			component *ptr;
+			
+			if(( ptr = find( adrs ))) return( ptr->handler->examine( adrs - ptr->base, labels, buffer, max ));
+			_report->raise( Warning_Level, Map_Module, Address_OOR, instance, "Examine address not in mapped segment", adrs );
+			return( false );
 		}
 };
 

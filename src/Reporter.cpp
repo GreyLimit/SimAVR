@@ -28,9 +28,11 @@ static ModuleName modules[] = {
 	{ Map_Module,		"Map"			},
 	{ SRAM_Module,		"SRAM"			},
 	{ Fuse_Module,		"Fuse"			},
-	{ Symbols_Module,	"Symbols_Module"	},
-	{ Timer_Module,		"Timer_Module"		},
-	{ Pin_Module,		"Pin_Module"		},
+	{ Symbols_Module,	"Symbols"		},
+	{ Timer_Module,		"Timer"			},
+	{ Pin_Module,		"Pin"			},
+	{ Port_Module,		"Port"			},
+	{ Coverage_Module,	"Coverage"		},
 	{ Application_Module,	"Application"		}
 };
 
@@ -118,6 +120,7 @@ static ExceptionName exceptions[] = {
 	{ Source_ORR,			"Source OOR"		},
 	{ Destination_OOR,		"destination OOR"	},
 	{ Interrupt_OOR,		"Interrupt OOR"		},
+	{ Device_Missing,		"Hardware incomplete"	},
 	{ Read_Only,			"Read only"		},
 	{ Read_Invalid,			"Read invalid"		},
 	{ Write_Only,			"Write only"		},

@@ -30,6 +30,8 @@ typedef enum {
 	Symbols_Module,
 	Timer_Module,
 	Pin_Module,
+	Port_Module,
+	Coverage_Module,
 	Application_Module
 } Modules;
 
@@ -92,6 +94,7 @@ typedef enum {
 	Source_ORR,
 	Destination_OOR,
 	Interrupt_OOR,
+	Device_Missing,			// Some element of hardware is incomplete.
 	Read_Only,
 	Read_Invalid,
 	Write_Only,

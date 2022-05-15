@@ -519,10 +519,21 @@ template< word instance, byte irq_number > class ProgrammerDevice : public Progr
 		//	Device register updates appear through here.
 		//
 		virtual byte read_register( word id ) {
+			ASSERT( id == SPMCSR );
 			return( _spmcsr );
 		}
 		virtual void write_register( word id, byte value ) {
+			ASSERT( id == SPMCSR );
 			update_spmcsr( value );
+		}
+		//
+		//	Mechanism for examining content outside the
+		//	framework of the simulation.
+		//
+		virtual bool examine( word id, Symbols *labels, char *buffer, int max ) {
+			ASSERT( id == SPMCSR );
+			snprintf( buffer, max, "SPMCSR=%02X", _spmcsr );
+			return( true );
 		}
 };
 

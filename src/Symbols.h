@@ -105,7 +105,7 @@ class Symbols {
 					if( value == look->value ) return( look );
 					last = look;
 				}		
-				else if( value < look->value ) break;
+				if( value < look->value ) break;
 			}
 			return( last );
 		}
@@ -259,80 +259,98 @@ class Symbols {
 		}
 
 		//
+		//	Expand a constant value using specific domain rules.
+		//
+		char *constant( symbol_type type, dword value, char *buffer, int max ) {
+			switch( type ) {
+				case bit_constant: {
+					if( value ) {
+						int	len;
+						dword	reversed;
+
+						len = 0;
+						reversed = 0;
+						while( value ) {
+							len++;
+							reversed = ( reversed << 1 ) | ( value & 1 );
+							value >>= 1;
+						}
+						if(( len + 1 ) >= max ) {
+							snprintf( buffer, max, "%c%X", hexidecimal, value );
+						}
+						else {
+							char *a = buffer;
+							
+							*a++ = binary;
+							while( len-- ) *a++ = ( reversed & 1 )? '1': '0';
+							*a = EOS;
+						}
+					}
+					else {
+						snprintf( buffer, max, "%c0", binary );
+					}
+					break;
+				}
+				case byte_constant: {
+					snprintf( buffer, max, "%c%02X", hexidecimal, value & 0xFF );
+					break;
+				}
+				case word_constant: {
+					snprintf( buffer, max, "%c%04X", hexidecimal, value & 0xFFFF );
+					break;
+				}
+				case program_word: {
+					snprintf( buffer, max, "%c%04X", hexidecimal, value & 0xFFFF );
+					break;
+				}
+				case byte_register: {
+					snprintf( buffer, max, "r%d", value );
+					break;
+				}
+				case word_register: {
+					snprintf( buffer, max, "r%d:r%d", value+1, value );
+					break;
+				}
+				case port_number: {
+					snprintf( buffer, max, "%c%02X", hexidecimal, value );
+					break;
+				}
+				default: {
+					snprintf( buffer, max, "%c%06X", hexidecimal, value );
+					break;
+				}
+			}
+			return( buffer );
+		}
+
+		//
 		//	Expand value to symbol[+offset] or hex constant.
 		//
 		char *expand( symbol_type type, dword value, char *buffer, int max ) {
 			label	*look;
 
+			//
+			//	Any label we can reference off?
+			//
 			if(( look = find_nearest( type, value ))) {
-				if(( look->value < value )&&(( type == program_address )||( type == memory_address ))) {
-					snprintf( buffer, max, "%s+%d", look->name, ( value - look->value  ));
-				}
-				else {
+				//
+				//	Exact match is easy case.
+				//
+				if( look->value == value ) {
 					snprintf( buffer, max, "%s", look->name );
+					return( buffer );
 				}
-			}
-			else {
-				switch( type ) {
-					case bit_constant: {
-						if( value ) {
-							int	len;
-							dword	reversed;
-
-							len = 0;
-							reversed = 0;
-							while( value ) {
-								len++;
-								reversed = ( reversed << 1 ) | ( value & 1 );
-								value >>= 1;
-							}
-							if(( len + 1 ) >= max ) {
-								snprintf( buffer, max, "%c%X", hexidecimal, value );
-							}
-							else {
-								char *a = buffer;
-								
-								*a++ = binary;
-								while( len-- ) *a++ = ( reversed & 1 )? '1': '0';
-								*a = EOS;
-							}
-						}
-						else {
-							snprintf( buffer, max, "%c0", binary );
-						}
-						break;
-					}
-					case byte_constant: {
-						snprintf( buffer, max, "%c%02X", hexidecimal, value & 0xFF );
-						break;
-					}
-					case word_constant: {
-						snprintf( buffer, max, "%c%04X", hexidecimal, value & 0xFFFF );
-						break;
-					}
-					case program_word: {
-						snprintf( buffer, max, "%c%04X", hexidecimal, value & 0xFFFF );
-						break;
-					}
-					case byte_register: {
-						snprintf( buffer, max, "r%d", value );
-						break;
-					}
-					case word_register: {
-						snprintf( buffer, max, "r%d:r%d", value+1, value );
-						break;
-					}
-					case port_number: {
-						snprintf( buffer, max, "%c%02X", hexidecimal, value );
-						break;
-					}
-					default: {
-						snprintf( buffer, max, "%c%06X", hexidecimal, value );
-						break;
+				if(( type == program_address )||( type == memory_address )) {
+					if(( look->value < value )&&(( type == program_address )||( type == memory_address ))) {
+						snprintf( buffer, max, "%s+%d", look->name, ( value - look->value  ));
+						return( buffer );
 					}
 				}
 			}
-			return( buffer );
+			//
+			//	Output a pure numerical answer.
+			//
+			return( constant( type, value, buffer, max ));
 		}
 
 		//
@@ -509,6 +527,28 @@ class Symbols {
 			fclose( to );
 			return( true );
 		}
+
+		//
+		//	create textual representation of the 'i'th symbol
+		//	(starting at 0) return true if there is such a symbol.
+		//
+		bool show_symbol( int i, bool name_order, char *buffer, int max ) {
+			char	expr[ max_buffer ];
+			label	*look;
+
+			
+			if( name_order ) {
+				for( look = _by_name; look && i; i-- ) look = look->next_by_name;
+				if( look == NULL ) return( false );
+				snprintf( buffer, max,  "%s/%s=%s", name_type( look->type ), look->name, constant( look->type, look->value, expr, max_buffer ));
+				return( true );
+			}
+			for( look = _by_value; look && i; i-- ) look = look->next_by_value;
+			if( look == NULL ) return( false );
+			snprintf( buffer, max,  "%s/%s=%s", name_type( look->type ), look->name, constant( look->type, look->value, expr, max_buffer ));
+			return( true );
+		}
+			
 };
 
 

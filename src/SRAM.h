@@ -84,6 +84,17 @@ template< word size > class SRAM : public Memory {
 		virtual word capacity( void ) {
 			return( size );
 		}
+
+		//
+		//	Mechanism for examining content outside the
+		//	framework of the simulation.
+		//
+		virtual bool examine( word adrs, Symbols *labels, char *buffer, int max ) {
+			if( adrs >= size ) return( false );
+			snprintf( buffer, max, "SRAM[%04X]=%02X", (int)adrs, (int)_ram[ adrs ]);
+			return( true );
+		}
+
 };	
 
 #endif

@@ -227,6 +227,15 @@ class Clock : public Notification {
 			}
 			_clkpr = value;
 		}
+		//
+		//	Mechanism for examining content outside the
+		//	framework of the simulation.
+		//
+		virtual bool examine( word id, Symbols *labels, char *buffer, int max ) {
+			ASSERT( id == size_CLKPS );
+			snprintf( buffer, max, "CLKPS=%02X", _clkpr );
+			return( true );
+		}
 };
 
 

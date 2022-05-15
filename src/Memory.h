@@ -13,6 +13,7 @@
 //
 #include "Base.h"
 #include "Validation.h"
+#include "Symbols.h"
 
 //
 //	You can only read or write to a memory location
@@ -43,13 +44,18 @@ class Memory {
 
 		//
 		//	Provide the entry point for mapping memory segments
-		//	but default it to failing.  Also provide a mechanism
-		//	for the mapping module to tell a 'mapped in' segment
-		//	how far its base address has moved (from an initial 0).
+		//	allowing them to maintain their 'real' location in
+		//	a global address space.
 		//
-		virtual bool segment( Memory *handler, word adrs ) { ABORT(); return( false ); }
+		virtual bool segment( Memory *handler, word adrs ) { return( false ); }
 		virtual void shifted( word offset ) { return; }
-};	
+
+		//
+		//	Mechanism for examining content outside the
+		//	framework of the simulation.
+		//
+		virtual bool examine( word adrs, Symbols *labels, char *buffer, int max ) = 0;
+};
 
 #endif
 

@@ -15,17 +15,7 @@
 #include "Reporter.h"
 
 //
-//	Pins come in a number of flavours
-//
-enum PinMode {
-	PinDisabled,
-	PinInput,
-	PinOutput,
-	PinAnalogue
-};
-
-//
-//	The underlying Pin class
+//	The Pin Class
 //
 class Pin {
 	private:
@@ -40,59 +30,53 @@ class Pin {
 		word		_number;
 
 		//
-		//	Our current mode.
+		//	Pin characteristics
 		//
-		PinMode		_mode;
-
-		//
-		//	Our current value.
-		//
-		word		_value;
+		bool		_output,
+				_pullup,
+				_value;
 
 	public:
 		Pin( Reporter *report, word number ) {
 			_report = report;
 			_number = number;
-			_mode = PinDisabled;
-			_value = 0;
+			_output = false;
+			_pullup = false;
+			_value = false;
 		}
-		
 		//
-		//	Basic things that can be done to a pin:
+		//	We will implement the PIN API in the same way as the hardware..
 		//
-		void set_mode( PinMode mode ) {
-			_report->raise( Information_Level, Pin_Module, Config_Change, _number, "New pin mode", (word)mode );
-			_mode =  mode;
-			_value = 0;
+		bool get_DDR( void ) {
+			return( _output );
+		}
+		void set_DDR( bool output ) {
+			if( output != _output ) _report->raise( Error_Level, Pin_Module, Config_Change, _number, "Change direction", ( output? 1: 0 ));
+			_output = output;
 		}
 			
-		PinMode get_mode( void ) {
-			return( _mode );
+		bool get_PORT( void ) {
+			return( _value );
 		}
-
-		bool get_input( void ) {
-			if( _mode != PinInput ) {
-				_report->raise( Error_Level, Pin_Module, Read_Invalid, _number, "Read from non-input pin" );
-				return( false );
-			}
-			return( _value? true: false );
-		}
-			
-		void set_output( bool to )  {
-			if( _mode != PinOutput ) {
-				_report->raise( Error_Level, Pin_Module, Read_Invalid, _number, "Write to non-output pin" );
+		void set_PORT( bool value ) {
+			if( _output ) {
+				if( value != _value ) _report->raise( Error_Level, Pin_Module, Config_Change, _number, "Change value", ( value? 1: 0 ));
+				_value = value;
 			}
 			else {
-				_value = ( to? 1: 0 );
+				if( value != _pullup ) _report->raise( Error_Level, Pin_Module, Config_Change, _number, "Change pullup", ( value? 1: 0 ));
+				_pullup = value;
 			}
 		}
-		
-		word get_analogue( void ) {
-			if( _mode != PinAnalogue ) {
-				_report->raise( Error_Level, Pin_Module, Read_Invalid, _number, "Read from non-analogue pin" );
-				return( 0 );
-			}
+
+		bool get_PIN( void ) {
 			return( _value );
+		}
+		void set_PIN( bool value ) {
+			if( value ) {
+				_value != _value;
+				_report->raise( Error_Level, Pin_Module, Config_Change, _number, "Toggle value", ( _value? 1: 0 ));
+			}
 		}
 };
 

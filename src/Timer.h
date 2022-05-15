@@ -90,6 +90,11 @@ class Timer : public Tick, Notification {
 		//
 		virtual byte read_register( word id ) = 0;
 		virtual void write_register( word id, byte value ) = 0;
+		//
+		//	Mechanism for examining content outside the
+		//	framework of the simulation.
+		//
+		virtual bool examine( word id, Symbols *labels, char *buffer, int max ) = 0;
 };
 
 
@@ -682,6 +687,71 @@ template< int instance, word maximum, byte compa, byte compb, byte ovrf, byte ca
 				}
 			}
 		}	
+		//
+		//	Mechanism for examining content outside the
+		//	framework of the simulation.
+		//
+		virtual bool examine( word id, Symbols *labels, char *buffer, int max ) {
+			switch( id ) {
+				case OCRnBH: {
+					snprintf( buffer, max, "OCR%dBH=%02X", instance, (int)high_byte( _ocrb ));
+					return( true );
+				}
+				case OCRnBL: {
+					snprintf( buffer, max, "OCR%dBL=%02X", instance, (int)low_byte( _ocrb ));
+					return( true );
+				}	
+				case OCRnAH: {
+					snprintf( buffer, max, "OCR%dAH=%02X", instance, (int)high_byte( _ocra ));
+					return( true );
+				}
+				case OCRnAL: {
+					snprintf( buffer, max, "OCR%dAL=%02X", instance, (int)low_byte( _ocra ));
+					return( true );
+				}
+				case ICRnH: {
+					snprintf( buffer, max, "ICR%dH=%02X", instance, (int)high_byte( _icr ));
+					return( true );
+				}
+				case ICRnL: {
+					snprintf( buffer, max, "ICR%dL=%02X", instance, (int)low_byte( _icr ));
+					return( true );
+				}
+				case TCNTnH: {
+					snprintf( buffer, max, "TCNT%dH=%02X", instance, (int)high_byte( _tcnt ));
+					return( true );
+				}
+				case TCNTnL: {
+					snprintf( buffer, max, "TCNT%dL=%02X", instance, (int)low_byte( _tcnt ));
+					return( true );
+				}
+				case TCCRnC: {
+					snprintf( buffer, max, "TCCR%dC=%02X", instance, (int)_tccrc );
+					return( true );
+				}
+				case TCCRnB: {
+					snprintf( buffer, max, "TCCR%dB=%02X", instance, (int)_tccrb );
+					return( true );
+				}
+				case TCCRnA: {
+					snprintf( buffer, max, "TCCR%dA=%02X", instance, (int)_tccra );
+					return( true );
+				}
+				case TIFRn: {
+					snprintf( buffer, max, "TIFR%d=%02X", instance, (int)_tifr );
+					return( true );
+				}
+				case TIMSKn: {
+					snprintf( buffer, max, "TIMSK%d=%02X", instance, (int)_timsk );
+					return( true );
+				}
+				default: {
+					ABORT();
+					break;
+				}
+			}
+			return( false );
+		}
 };
 
 

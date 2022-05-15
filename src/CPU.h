@@ -13,6 +13,15 @@
 #include "Symbols.h"
 
 //
+//	These are our valid addressing domains
+//
+typedef enum {
+	Register_Address,
+	Port_Address,
+	Memory_Address
+} AddressDomain;
+
+//
 //	Base Types
 //
 class CPU {
@@ -42,11 +51,12 @@ class CPU {
 		virtual dword next_instruction( void ) = 0;
 
 		//
-		//	Place textual representation of a register into the buffer supplied.
-		//	return true if there are more registers, false otherwise.
-		//	start with register equal to zero.
+		//	Place textual representation of an object (adrs in domain) into the buffer
+		//	supplied.
 		//
-		virtual bool show_register( Symbols *labels, word reg, char *buffer, int max ) = 0;
+		//	Return true if there was something there, false otherwise.
+		//
+		virtual bool examine( AddressDomain domain, word adrs, Symbols *labels, char *buffer, int max ) = 0;
 };
 
 #endif
