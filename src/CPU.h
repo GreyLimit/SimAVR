@@ -49,6 +49,12 @@ class CPU {
 		//	Return the address of the next instruction to execute.
 		//
 		virtual dword next_instruction( void ) = 0;
+		
+		//
+		//	Provide an interface to GPIO pins available on the CPU.
+		//
+		virtual bool get_gpio( word pin ) = 0;
+		virtual void set_gpio( word pin, bool state ) = 0;
 
 		//
 		//	Place textual representation of an object (adrs in domain) into the buffer

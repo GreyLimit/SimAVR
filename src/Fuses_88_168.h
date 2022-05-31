@@ -23,7 +23,7 @@ class Fuses_88_168 : public FusesPhaseOne {
 		word _bootsz[ RANGE( byte, size_BOOTSZ )];
 		
 	public:
-		Fuses_88_168( Reporter *report, AVR_Processor mcu ) : FusesPhaseOne( report ) {
+		Fuses_88_168( Reporter *report, int instance, AVR_Processor mcu ) : FusesPhaseOne( report, instance ) {
 			//
 			//	Set up the signature bytes.
 			//

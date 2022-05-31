@@ -57,18 +57,28 @@ static void Ctrl_C( int dummy ) {
 //
 //	wrapper to convert data space address to IO port number.  This
 //	is used on the extended ports as we have implemented them as
-//	a single extended set of io addresses (224 possible locations)
+//	an extension to the base set of 64 io addresses giving a total
+//	of 224 possible port locations.
 //
 #define EXT_IO(n)	((n)-0x20)
 
-static CPU *atmega328p( Reporter *channel, Coverage *tracker, const char *load, Fuses *fuses ) {
+static CPU *atmega328p( Reporter *channel, Coverage *tracker, const char *load, Fuses *fuses, Clock *crystal ) {
 	
+					//
+					//	Set up all the pins on the package.  We create
+					//	all of them though some are not IO pins.  Note
+					//	that the package will number them 1 to 28, the
+					//	array will index them 0 to 28.  0 will be ignored.
+					//
+	Pin		*pin[ 29 ];
+					for( int i = 0; i < 29; i++ ) pin[ i ] = new Pin( channel, i );
+					
 					//
 					//	Declare an interrupt manager for IRQs 1 through to 26.
 					//
-	Interrupts	*handler	= new InterruptDevice< 26 >( channel );
+	Interrupts	*irq_router	= new InterruptDevice< 26 >( channel, 0 );
 
-	Flash		*firmware	= new Program< 0, 64, 256, 32, 4000 >( channel );
+	Flash		*firmware	= new Program< 64, 256, 32, 4000 >( channel, 0 );
 						//
 						//	Load firmware from supplied hex file.
 						//
@@ -84,20 +94,20 @@ static CPU *atmega328p( Reporter *channel, Coverage *tracker, const char *load, 
 					//	needs to be used to convert the DS address to
 					//	one of the extended IO port numbers.
 					//
-	Memory		*ports		= new MapSegments< 1 >( channel, 224 );
+	Memory		*ports		= new Map( channel, 1, 224 );
 
-	Port		*portb		= new PortDevice< 1 >( channel );
+	Port		*portb		= new Port( channel, 1 );
 						//
 						//	Add in bits of IO
 						//
-						portb->attach( new Pin( channel, 0 ), 0 );
-						portb->attach( new Pin( channel, 15 ), 1 );
-						portb->attach( new Pin( channel, 16 ), 2 );
-						portb->attach( new Pin( channel, 17 ), 3 );
-						portb->attach( new Pin( channel, 18 ), 4 );
-						portb->attach( new Pin( channel, 19 ), 5 );
-						portb->attach( new Pin( channel, 9 ), 6 );
-						portb->attach( new Pin( channel, 10 ), 7 );
+						//portb->attach( new Pin( channel, 0 ), 0 );
+						portb->attach( pin[ 15 ], 1 );
+						portb->attach( pin[ 16 ], 2 );
+						portb->attach( pin[ 17 ], 3 );
+						portb->attach( pin[ 18 ], 4 );
+						portb->attach( pin[ 19 ], 5 );
+						portb->attach( pin[ 9 ], 6 );
+						portb->attach( pin[ 10 ], 7 );
 						ports->segment( new DeviceRegister( portb, Port::PORTn ), 0x05 );
 						ports->segment( new DeviceRegister( portb, Port::DDRn ), 0x04 );
 						ports->segment( new DeviceRegister( portb, Port::PINn ), 0x03 );
@@ -105,13 +115,13 @@ static CPU *atmega328p( Reporter *channel, Coverage *tracker, const char *load, 
 					//
 					//	Build the ADC system
 					//
-	AnalogueConversion *adc		= new AnalogueConversion( channel );
+	AnalogueConversion *adc		= new AnalogueConversion( channel, 0 );
 						ports->segment( new DeviceRegister( adc, AnalogueConversion::ADCSRA ), EXT_IO( 0x7A ));
 
 					//
 					//	The USART
 					//
-	SerialComms *serial		= new SerialComms( channel );
+	SerialComms *serial		= new SerialComms( channel, 0 );
 						ports->segment( new DeviceRegister( serial, SerialComms::UDRn ), EXT_IO( 0xC6 ));
 						ports->segment( new DeviceRegister( serial, SerialComms::UBRRnH ), EXT_IO( 0xC5 ));
 						ports->segment( new DeviceRegister( serial, SerialComms::UBRRnL ), EXT_IO( 0xC4 ));
@@ -122,7 +132,7 @@ static CPU *atmega328p( Reporter *channel, Coverage *tracker, const char *load, 
 					//
 					//	Declare the processor core.
 					//
-	AVR_CPU		*processor	= new AVR_CPU();
+	AVR_CPU		*processor	= new AVR_CPU( channel, 0, tracker );
 						//
 						//	"Special" CPU Registers that are located
 						//	in the port address space.
@@ -138,10 +148,8 @@ static CPU *atmega328p( Reporter *channel, Coverage *tracker, const char *load, 
 						ports->segment( new DeviceRegister( (Notification *)processor, AVR_CPU::RAMD ), 0x38 );
 						ports->segment( new DeviceRegister( (Notification *)processor, AVR_CPU::MCUCR ), 0x35 );
 						ports->segment( new DeviceRegister( (Notification *)processor, AVR_CPU::MCUSR ), 0x34 );
-
-	Clock		*crystal	= new Clock( channel, 16000 );
 						//
-						//	The processor see a WDT clock at 128 KHz, but does
+						//	The processor sees a WDT clock at 128 KHz, but does
 						//	not need to see any other clock input.
 						//
 						ports->segment( new DeviceRegister( (Notification *)crystal, Clock::CLKPR ), EXT_IO( 0x61 ));
@@ -153,8 +161,8 @@ static CPU *atmega328p( Reporter *channel, Coverage *tracker, const char *load, 
 					//	15	0x00E TIMER0_COMPA Timer/Counter0 Compare Match A
 					//	16	0x00F TIMER0_COMPB Timer/Counter0 Compare Match B
 					//	17	0x010 TIMER0_OVF Timer/Counter0 Overflow
-					//
-	Timer		*timer0		= new TimerDevice< 0, 0xFF, 15, 16, 17, 0 >( channel, handler );
+					// 
+	Timer		*timer0		= new TimerDevice< 0, true, 15, 16, 17, 0 >( channel, irq_router );
 						ports->segment( new DeviceRegister( (Notification *)timer0, Timer::TIMSKn ), EXT_IO( 0x6E ));
 						ports->segment( new DeviceRegister( (Notification *)timer0, Timer::OCRnB ), 0x28 );
 						ports->segment( new DeviceRegister( (Notification *)timer0, Timer::OCRnA ), 0x27 );
@@ -172,7 +180,7 @@ static CPU *atmega328p( Reporter *channel, Coverage *tracker, const char *load, 
 					//	13	0x00C TIMER1_COMPB Timer/Counter1 Compare Match B
 					//	14	0x00D TIMER1_OVF Timer/Counter1 Overflow
 					//
-	Timer		*timer1		= new TimerDevice< 1, 0xFFFF, 12, 13, 14, 11 >( channel, handler );
+	Timer		*timer1		= new TimerDevice< 1, false, 12, 13, 14, 11 >( channel, irq_router );
 						ports->segment( new DeviceRegister( (Notification *)timer1, Timer::OCRnBH ), EXT_IO( 0x8B ));
 						ports->segment( new DeviceRegister( (Notification *)timer1, Timer::OCRnBL ), EXT_IO( 0x8A ));
 						ports->segment( new DeviceRegister( (Notification *)timer1, Timer::OCRnAH ), EXT_IO( 0x89 ));
@@ -195,7 +203,7 @@ static CPU *atmega328p( Reporter *channel, Coverage *tracker, const char *load, 
 					//	9	0x008 TIMER2_COMPB Timer/Counter2 Compare Match B
 					//	10	0x009 TIMER2_OVF Timer/Counter2 Overflow
 					//
-	Timer		*timer2		= new TimerDevice< 0, 0xFF, 8, 9, 10, 0 >( channel, handler );
+	Timer		*timer2		= new TimerDevice< 2, true, 8, 9, 10, 0 >( channel, irq_router );
 						ports->segment( new DeviceRegister( (Notification *)timer2, Timer::OCRnB ), EXT_IO( 0xB4 ));
 						ports->segment( new DeviceRegister( (Notification *)timer2, Timer::OCRnA ), EXT_IO( 0xB3 ));
 						ports->segment( new DeviceRegister( (Notification *)timer2, Timer::TCNTn ), EXT_IO( 0xB2 ));
@@ -207,31 +215,31 @@ static CPU *atmega328p( Reporter *channel, Coverage *tracker, const char *load, 
 					//
 					//	The Flash (Re)Programming Device.
 					//
+					//	IRQ
+					//
 					//	26	0x019 SPM_Ready Store Program Memory Ready
 					//
-	Programmer	*programmer	= new ProgrammerDevice< 0, 26 >( channel, firmware, processor, handler, crystal, fuses );
+	Programmer	*programmer	= new ProgrammerDevice< 26 >( channel, 0, firmware, processor, irq_router, crystal, fuses );
 						ports->segment( new DeviceRegister( (Notification *)programmer, Programmer::SPMCSR ), 0x37 );
 						crystal->add( Programmer::System_Clock, programmer );
 
 					//
-					//	Define the CPU registers as a small piece of memory.
-					//
-	Memory		*regs		= new SRAM< 32 >( channel );
-
-					//
 					//	Finally create and include the program data space itself.
 					//
-	Memory		*sram		= new SRAM< 2048 >( channel );
+	Memory		*sram		= new SRAM< 2048 >( channel, 1 );
 
 					//
 					//	Create the "Data Space" address map that the
 					//	register, port and SRAM will be mapped into.
 					//
-	Memory		*data		= new MapSegments< 0 >( channel, 0x0100 + 2048 );
+					//	We anticipate an address space of 256 bytes (registers
+					//	and ports) plus the 2048 bytes of static RAM.
+					//
+	Memory		*data		= new Map( channel, 0, 0x0100 + 2048 );
 						//
-						//	The other areas into the data address space.
+						//	Map the registers and other areas into the data address space.
 						//
-						data->segment( regs,  0x0000 );
+						for( int i = 0; i < AVR_CPU::GPRegisters; i++ ) data->segment( new DeviceRegister( (Notification *)processor, i ), i );
 						data->segment( ports, 0x0020 );
 						data->segment( sram,  0x0100 );
 	//
@@ -243,12 +251,10 @@ static CPU *atmega328p( Reporter *channel, Coverage *tracker, const char *load, 
 				programmer,
 				fuses,
 				data,
-				regs,
 				ports,
-				handler,
-				crystal,
-				tracker,
-				channel );
+				pin, 29,	// remember 0 then 1 to 28.
+				irq_router,
+				crystal );
 
 	return( processor );
 }
@@ -260,9 +266,10 @@ int main( int argc, char* argv[]) {
 	char	*hex;
 	
 	Reporter *channel	= new Console;
-	Symbols	*labels		= new Symbols( channel );
-	Fuses	*fuses		= new Fuses_328( channel, AVR_ATmega328P );
-
+	Symbols	*labels		= new Symbols( channel, 0 );
+	Fuses	*fuses		= new Fuses_328( channel, 0, AVR_ATmega328P );
+	Clock	*crystal	= new Clock( channel, 0, 16000 );
+	
 	hex = NULL;
 	for( int a = 1; a < argc; a++ ) {
 		char	*p;
@@ -296,8 +303,8 @@ int main( int argc, char* argv[]) {
 	}
 	
 	BreakPoint	*breaks		= new BreakPoint();
-	Coverage	*tracker	= new Coverage( channel );
-	CPU		*simulate	= atmega328p( channel, tracker, hex, fuses );
+	Coverage	*tracker	= new Coverage( channel, 0 );
+	CPU		*simulate	= atmega328p( channel, tracker, hex, fuses, crystal );
 
 	//
 	//	Prepare to catch Ctrl-C
@@ -312,7 +319,7 @@ int main( int argc, char* argv[]) {
 		dword	pc	= simulate->next_instruction();
 		word	len	= simulate->disassemble( pc, labels, inst, BUFFER );
 
-		printf( "%s: %s\n", labels->expand( program_address, pc, adrs, BUFFER ), inst );
+		printf( "%8lu %s: %s\n", (unsigned long int)crystal->count(), labels->expand( program_address, pc, adrs, BUFFER ), inst );
 		printf( "> " );
 		fflush( stdout );
 		
@@ -347,7 +354,7 @@ int main( int argc, char* argv[]) {
 					if( counter ) {
 						if( --count == 0 ) break;
 						if( channel->exception()) {
-							printf( "Exception after %d instructions.\n", count - left );
+							printf( "Exception after %d instructions.\n",  left - count  );
 							break;
 						}
 					}
@@ -390,7 +397,7 @@ int main( int argc, char* argv[]) {
 					}
 					pc = simulate->next_instruction();
 					len = simulate->disassemble( pc, labels, inst, BUFFER );
-					printf( "%s: %s\n", labels->expand( program_address, pc, adrs, BUFFER ), inst );
+					printf( "%8lu %s: %s\n", (unsigned long int)crystal->count(), labels->expand( program_address, pc, adrs, BUFFER ), inst );
 				}
 				break;
 			}
@@ -437,14 +444,39 @@ int main( int argc, char* argv[]) {
 				//	Add a break point
 				//
 				word	n;
-				dword	a;
+				dword	a1, a2;
+				char	*c;
 
-				if( labels->evaluate( program_address, dec, &a )) {
-					if(( n = breaks->add( a )) == 0 ) {
-						printf( "Unable to add new breakpoint.\n" );
+				if(( c = strchr( dec, COMMA )) != NULL ) {
+					*c++ = EOS;
+					if( labels->evaluate( program_address, dec, &a1 ) && labels->evaluate( program_address, c, &a2 )) {
+						if( a2 < a1 ) {
+							printf( "Invalid end of breakpoint range.\n" );
+						}
+						else {
+							if(( n = breaks->add( a1, a2+1 )) == 0 ) {
+								printf( "Unable to add new breakpoint.\n" );
+							}
+							else {
+								printf( "Breakpoint %d set.\n", n );
+							}
+						}
 					}
 					else {
-						printf( "Breakpoint %d set.\n", n );
+						printf( "Invalid breakpoint address\n" );
+					}
+				}
+				else {
+					if( labels->evaluate( program_address, dec, &a1 )) {
+						if(( n = breaks->add( a1, a1+1 )) == 0 ) {
+							printf( "Unable to add new breakpoint.\n" );
+						}
+						else {
+							printf( "Breakpoint %d set.\n", n );
+						}
+					}
+					else {
+						printf( "Invalid breakpoint address\n" );
 					}
 				}
 				break;
@@ -543,7 +575,19 @@ int main( int argc, char* argv[]) {
 							
 						if(( count = breaks->list( id, LIST ))) {
 							printf( "Break points:\n" );
-							for( int i = 0; i < count; i++ ) printf( "\t%d @ %s\n", id[ i ], labels->expand( program_address, breaks->address( id[ i ]), inst, BUFFER ));
+							for( int i = 0; i < count; i++ ) {
+								dword	s, e;
+
+								if( breaks->address( id[ i ], &s, &e )) {
+									e -= 1;
+									if( e == s ) {
+										printf( "\t%d @ %s\n", id[ i ], labels->expand( program_address, s, inst, BUFFER ));
+									}
+									else {
+										printf( "\t%d @ %s,%s\n", id[ i ], labels->expand( program_address, s, inst, BUFFER ), labels->expand( program_address, e, adrs, BUFFER ));
+									}
+								}
+							}
 						}
 						else {
 							printf( "No breaks set.\n" );
@@ -554,11 +598,64 @@ int main( int argc, char* argv[]) {
 						//
 						//	Coverage data.
 						//
-						tracker->dump( stdout );
+						int sf[ LIST ], fc;
+						switch( *dec++ ) {
+							case 'm': {
+								fc = 0;
+								sf[ fc++ ] =  Read_Access;
+								sf[ fc++ ] =  Write_Access;
+								sf[ fc++ ] =  Stack_Access;
+								break;
+							}
+							case 'p': {
+								fc = 0;
+								sf[ fc++ ] =  Execute_Access;
+								sf[ fc++ ] =  Jump_Access;
+								sf[ fc++ ] =  Call_Access;
+								sf[ fc++ ] =  Data_Access;
+								break;
+							}
+							case 'a':
+							default: {
+								fc = 0;
+								sf[ fc++ ] =  Execute_Access;
+								sf[ fc++ ] =  Jump_Access;
+								sf[ fc++ ] =  Call_Access;
+								sf[ fc++ ] =  Data_Access;
+								sf[ fc++ ] =  Read_Access;
+								sf[ fc++ ] =  Write_Access;
+								sf[ fc++ ] =  Stack_Access;
+								break;
+							}
+						}
+						tracker->dump( stdout, sf, fc );
 						break;
 					}
 					default: {
-						printf( "Help display not written yet.\n" );
+						printf( "Help:\n" );
+						printf( "<CR>\tSingle step\n" );
+						printf( "r\tRun\n" );
+						printf( "rN\tRun N instructions\n" );
+						printf( "t\tTrace\n" );
+						printf( "tN\tTrace N instructions\n" );
+						printf( "dN\tDisassemble N instructions\n" );
+						printf( "dN@A\tas above but from address A\n" );
+						printf( "wF\tSave symbols to file F\n" );
+						printf( "bA\tSet breakpoint at address A\n" );
+						printf( "xN\tDelete breakpoint number N\n" );
+						printf( "?\tThis help\n" );
+						printf( "?v\tDisplay symbols by value\n" );
+						printf( "?s\tDisplay symbols by name\n" );
+						printf( "?r\tDisplay all CPU registers\n" );
+						printf( "?rN\tDisplay CPU register N\n" );
+						printf( "?p\tDisplay all ports\n" );
+						printf( "?pN\tDisplay port number N\n" );
+						printf( "?b\tDisplay breakpoints\n" );
+						printf( "?ca\tDisplay all coverage data\n" );
+						printf( "?cp\tDisplay program coverage data\n" );
+						printf( "?cm\tDisplay memory coverage data\n" );
+						printf( "\n\tN and A have the form '({symbol}[+-])?{number}'\n" );
+						printf( "\twhere number is '$' hex, '%%' bin or decimal.\n" );
 						break;
 					}
 				}

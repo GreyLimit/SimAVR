@@ -14,7 +14,7 @@
 
 class Fuses_328 : public FusesPhaseTwo {
 	public:
-		Fuses_328( Reporter *report, AVR_Processor mcu ) : FusesPhaseTwo( report, mcu ) {
+		Fuses_328( Reporter *report, int instance, AVR_Processor mcu ) : FusesPhaseTwo( report, instance, mcu ) {
 			//
 			//	Set up the signature bytes.
 			//

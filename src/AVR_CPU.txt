@@ -125,6 +125,7 @@ class AVR_CPU;
 #include "Validation.h"
 #include "DeviceRegister.h"
 #include "Coverage.h"
+#include "Pin.h"
 
 //
 //	Also need to be able to raise exceptions and reports
@@ -157,22 +158,41 @@ executed.
 class AVR_CPU : public CPU, Notification, Tick {
 	public:
 		//
+		//	Define the number of registers which the
+		//	architecture intrinsically uses.  These are
+		//	the General Purpose (GP) Registers.
+		//
+		static const word GPRegisters = 32;
+
+		//
+		//	The General Purpose registers are addressed
+		//	externally via the Device register mechanism
+		//	using an identifier equivalent to their individual
+		//	register numbers.
+		//
+		static const word GPR0 = 0;
+		//
+		//	... through to ...
+		//
+		static const word GPR31 = 31;	// GPRegisters-1
+
+		//
 		//	Define the Device Register identifiers for all the
 		//	IO based registers that the CPU uses.  The numbers
 		//	are arbitrary and do not specify the actual IO port
 		//	number they might be located at.
 		//
-		static const word SPH	= 0;
-		static const word SPL	= 1;
-		static const word SREG	= 2;
-		static const word RAMD	= 3;
-		static const word RAMX	= 4;
-		static const word RAMY	= 5;
-		static const word RAMZ	= 6;
-		static const word EIND	= 7;
-		static const word MCUCR	= 8;
-		static const word MCUSR	= 9;
-		static const word WDTCSR = 10;
+		static const word SPH	= GPRegisters + 0;
+		static const word SPL	= GPRegisters + 1;
+		static const word SREG	= GPRegisters + 2;
+		static const word RAMD	= GPRegisters + 3;
+		static const word RAMX	= GPRegisters + 4;
+		static const word RAMY	= GPRegisters + 5;
+		static const word RAMZ	= GPRegisters + 6;
+		static const word EIND	= GPRegisters + 7;
+		static const word MCUCR	= GPRegisters + 8;
+		static const word MCUSR	= GPRegisters + 9;
+		static const word WDTCSR = GPRegisters + 10;
 
 		//
 		//	Define clock IDs we might use
@@ -193,10 +213,10 @@ class AVR_CPU : public CPU, Notification, Tick {
 		//	Routines to combine byte, word values up to word
 		//	and dword, and split words and dwords down.
 		//
-		static inline byte high( word v ) { return( v >> 8 ); }
-		static inline word highw( dword v ) { return( v >> 16 ); }
-		static inline byte low( word v ) { return( v ); }
-		static inline word loww( dword v ) { return( v ); }
+		static inline byte high( word v ) { return((byte)( v >> 8 )); }
+		static inline word highw( dword v ) { return((word)( v >> 16 )); }
+		static inline byte low( word v ) { return( (byte)v ); }
+		static inline word loww( dword v ) { return( (word)v ); }
 		static inline word combine( byte h, byte l ) { return( ((word)h << 8 ) | (word)l ); }
 		static inline dword combinew( word h, word l ) { return( ((dword)h << 16 ) | (dword)l ); }
 
@@ -209,6 +229,7 @@ class AVR_CPU : public CPU, Notification, Tick {
 		//	Reporter handler.
 		//
 		Reporter	*_reporter;
+		int		_instance;
 
 		//
 		//	Tracking of coverage
@@ -239,9 +260,15 @@ class AVR_CPU : public CPU, Notification, Tick {
 		//	The various element of memory:
 		//
 		Memory		*_data,
-				*_regs,
 				*_ports;
+		word		_reg[ GPRegisters ];
 
+		//
+		//	The GPIO facilities.
+		//
+		Pin		**_pin;
+		word		_pins;
+		
 		//
 		//	Where we collect and manage IRQs.
 		//
@@ -391,14 +418,20 @@ class AVR_CPU : public CPU, Notification, Tick {
 		//
 		//	Stub Constructor definition
 		//
-		AVR_CPU( void );
+		AVR_CPU( Reporter *handler, int instance, Coverage *track );
 {BS}
 		//
 		//	AVR_CPU CONSTRUCTOR
 		//	=====================
 		//
-		AVR_CPU::AVR_CPU( void ) {
+		AVR_CPU::AVR_CPU( Reporter *handler, int instance, Coverage *track ) {
 			_constructed = false;
+			//
+			//	Save the tracking and error handler.
+			//
+			_reporter = handler;
+			_instance = instance;
+			_track = track;
 		}
 {B}
 		//
@@ -411,12 +444,11 @@ class AVR_CPU : public CPU, Notification, Tick {
 					Programmer	*programmer,	
 					Fuses		*fuses,	
 					Memory		*data,
-					Memory		*regs,
 					Memory		*ports,
+					Pin		**pin,
+					word		pins,
 					Interrupts	*irqs,
-					Clock		*clock,
-					Coverage	*track,
-					Reporter	*handler );
+					Clock		*clock );
 {BS}
 		//
 		//	constructor
@@ -427,17 +459,16 @@ class AVR_CPU : public CPU, Notification, Tick {
 		//	routine.
 		//
 		void AVR_CPU::construct(	AVR_InstSet	cpu,
-					byte		pas,		// Program Address size (bits)
-					Flash		*program,
-					Programmer	*programmer,	
-					Fuses		*fuses,	
-					Memory		*data,
-					Memory		*regs,
-					Memory		*ports,
-					Interrupts	*irqs,
-					Clock		*clock,
-					Coverage	*track,
-					Reporter	*handler ) {
+						byte		pas,		// Program Address size (bits)
+						Flash		*program,
+						Programmer	*programmer,	
+						Fuses		*fuses,	
+						Memory		*data,
+						Memory		*ports,
+						Pin		**pin,
+						word		pins,
+						Interrupts	*irqs,
+						Clock		*clock ) {
 			//
 			//	Handle the unusual construction mechanism this
 			//	class uses.
@@ -465,8 +496,13 @@ class AVR_CPU : public CPU, Notification, Tick {
 			//	Memory in its various forms.
 			//
 			_data = data;
-			_regs = regs;
 			_ports = ports;
+			//
+			//	pins..
+			//
+			_pins = pins;
+			_pin = new Pin *[ _pins ]();
+			for( int i = 0; i < _pins; i++ ) _pin[ i ] = pin[ i ];
 			//
 			//	Interrupt mechanism
 			//
@@ -479,11 +515,6 @@ class AVR_CPU : public CPU, Notification, Tick {
 			//	Set CPU flags.
 			//
 			_skip_next = false;
-			//
-			//	Save the tracking and error handler.
-			//
-			_track = track;
-			_reporter = handler;
 
 			//
 			//	Initial system is powered on.
@@ -508,8 +539,8 @@ class AVR_CPU : public CPU, Notification, Tick {
 		byte read_reg( word reg ) ;
 		void write_reg( word reg, byte val );
 {BS}
-		byte AVR_CPU::read_reg( word reg ) { return( _regs->read( reg )); }
-		void AVR_CPU::write_reg( word reg, byte val ) { _regs->write( reg, val ); }
+		byte AVR_CPU::read_reg( word reg ) { return( _reg[ reg ]); }
+		void AVR_CPU::write_reg( word reg, byte val ) { _reg[ reg ] = val; }
 {B}
 
 		//
@@ -741,7 +772,8 @@ class AVR_CPU : public CPU, Notification, Tick {
 					break;
 				}
 				default: {
-					_reporter->raise( Terminate_Level, CPU_Module, Not_Supported, _pas_bytes  );
+					ABORT();
+					break;
 				}
 			}
 			_pc = adrs & _pc_mask;
@@ -768,7 +800,8 @@ class AVR_CPU : public CPU, Notification, Tick {
 					break;
 				}
 				default: {
-					_reporter->raise( Terminate_Level, CPU_Module, Not_Supported, _pas_bytes );
+					ABORT();
+					break;
 				}
 			}
 			return( _pas_bytes );
@@ -854,28 +887,16 @@ class AVR_CPU : public CPU, Notification, Tick {
 		//	Links through back to the Exceptions object pointed
 		//	to be '_reporter'
 		//
-		bool raise( Level lvl, Exception number );
+		bool report( Level lvl, Exception number );
 {BS}
-		bool AVR_CPU::raise( Level lvl, Exception number ) {
-			return( _reporter->raise( lvl, CPU_Module, number ));
+		bool AVR_CPU::report( Level lvl, Exception number ) {
+			return( _reporter->report( lvl, CPU_Module, _instance, number ));
 		}
 {B}
-		bool raise( Level lvl, Exception number, word arg );
+		bool report( Level lvl, Exception number, word arg );
 {BS}
-		bool AVR_CPU::raise( Level lvl, Exception number, word arg ) {
-			return( _reporter->raise( lvl, CPU_Module, number, arg ));
-		}
-{B}
-		bool raise( Level lvl, Exception number, dword arg1, word arg2 );
-{BS}
-		bool AVR_CPU::raise( Level lvl, Exception number, dword arg1, word arg2 ) {
-			return( _reporter->raise( lvl, CPU_Module, number, arg1, arg2  ));
-		}
-{B}
-		bool raise( Level lvl, Exception number, const char *mesg );
-{BS}
-		bool AVR_CPU::raise( Level lvl, Exception number, const char *mesg ) {
-			return( _reporter->raise( lvl, CPU_Module, number, 0, mesg ));
+		bool AVR_CPU::report( Level lvl, Exception number, word arg ) {
+			return( _reporter->report( lvl, CPU_Module, _instance, number, "%04X", (int)arg ));
 		}
 {B}
 
@@ -936,7 +957,7 @@ class AVR_CPU : public CPU, Notification, Tick {
 		word get_ry( void );
 		word get_rz( void );
 {BS}
-		word AVR_CPU::get_word_reg( word r ) { return( combinew( _regs->read( r+1 ), _regs->read( r ))); }
+		word AVR_CPU::get_word_reg( word r ) { return( combinew( _reg[ r+1 ], _reg[ r ])); }
 		word AVR_CPU::get_rw( void ) { return( get_word_reg( W_register )); }
 		word AVR_CPU::get_rx( void ) { return( get_word_reg( X_register )); }
 		word AVR_CPU::get_ry( void ) { return( get_word_reg( Y_register )); }
@@ -948,7 +969,10 @@ class AVR_CPU : public CPU, Notification, Tick {
 		void set_ry( word v );
 		void set_rz( word v );
 {BS}
-		void AVR_CPU::set_word_reg( word r, word v ) { _regs->write( r, low( v )); _regs->write( r+1, high( v )); }
+		void AVR_CPU::set_word_reg( word r, word v ) {
+			_reg[ r ] = low( v );
+			_reg[ r+1 ] = high( v );
+		}
 		void AVR_CPU::set_rw( word v ) { set_word_reg( W_register, v ); }
 		void AVR_CPU::set_rx( word v ) { set_word_reg( X_register, v ); }
 		void AVR_CPU::set_ry( word v ) { set_word_reg( Y_register, v ); }
@@ -956,7 +980,11 @@ class AVR_CPU : public CPU, Notification, Tick {
 {B}
 		word inc_rz( void );
 {BS}
-		word AVR_CPU::inc_rz( void ) { word z = get_rz(); set_rz( z + 1 ); return( z ); }
+		word AVR_CPU::inc_rz( void ) {
+			word z = get_rz();
+			set_rz( z + 1 );
+			return( z );
+		}
 {B}
 		
 		//
@@ -1168,6 +1196,11 @@ class AVR_CPU : public CPU, Notification, Tick {
 			//	Clear any pending interrupts.
 			//
 			_irqs->reset();
+			
+			//
+			//	Clear all the registers
+			//
+			for( int i = 0; i < GPRegisters; _reg[ i++ ] = 0 );
 
 			//
 			//	Status register cleared; global interrupts
@@ -1328,7 +1361,7 @@ class AVR_CPU : public CPU, Notification, Tick {
 				_clock->tick( ticks, true );
 			}
 			else {
-				_reporter->raise( Error_Level, CPU_Module, Unsupported_Instruction, opcode );
+				_reporter->report( Error_Level, CPU_Module, _instance, Unsupported_Instruction, "opcode $%04X", (int)opcode );
 			}
 		}
 {B}
@@ -1443,6 +1476,19 @@ class AVR_CPU : public CPU, Notification, Tick {
 		}
 {B}
 		//
+		//	Provide an interface to GPIO pins available on the CPU.
+		//
+		virtual bool get_gpio( word pin );
+		virtual void set_gpio( word pin, bool state );
+{BS}
+		bool AVR_CPU::get_gpio( word pin ) {
+			return( false );
+		}
+		void AVR_CPU::set_gpio( word pin, bool state ) {
+		}
+{B}
+
+		//
 		//	Place textual representation of an object (adrs in domain) into the buffer
 		//	supplied.
 		//
@@ -1483,8 +1529,8 @@ class AVR_CPU : public CPU, Notification, Tick {
 				case MCUCR: return( _mcucr );
 				case MCUSR: return( _mcusr );
 				default: {
-					ABORT();
-					break;
+					ASSERT( id < GPRegisters );
+					return( _reg[ id ]);
 				}
 			}
 			return( 0 );
@@ -1536,7 +1582,8 @@ class AVR_CPU : public CPU, Notification, Tick {
 					break;
 				}
 				default: {
-					ABORT();
+					ASSERT( id < GPRegisters );
+					_reg[ id ] = value;
 					break;
 				}
 			}
@@ -1600,7 +1647,8 @@ class AVR_CPU : public CPU, Notification, Tick {
 					return( true );
 				}
 				default: {
-					ABORT();
+					ASSERT( id < GPRegisters );
+					snprintf( buffer, max, "R%d = $%02X", (int)id, (int)_reg[ id ]);
 					break;
 				}
 			}
@@ -2004,7 +2052,7 @@ public:
 		//	Called when any decoded opcode does not uniquely identify a
 		//	single specific instruction.
 		//
-		if( state->raise( Error_Level, Illegal_Instruction, opcode )) return( 0 );
+		if( state->report( Error_Level, Illegal_Instruction, opcode )) return( 0 );
 		//
 		//	Action here will depend on the CPU being
 		//	simulated.
@@ -2551,7 +2599,7 @@ public:
 		word	clocks;
 		
 		if(( clocks = ticks[ state->mcu_type()]) == 0 ) return( 0 );
-		state->raise( Information_Level, Hardware_Break );
+		state->report( Information_Level, Hardware_Break );
 		return( clocks );
 	}
 	virtual word disassemble( dword address, word opcode, Symbols *labels, AVR_CPU *state, char *buffer, int max ) {
@@ -3141,7 +3189,7 @@ public:
 		unmodified effectively making the clear and cypher text
 		identical.
 {B}
-		if( state->raise( Error_Level, Not_Implemented, opcode )) return( 0 );
+		if( state->report( Error_Level, Not_Implemented, opcode )) return( 0 );
 		
 		return( clocks );
 	}
@@ -5404,7 +5452,7 @@ public:
 		//
 		//	1001 0101 1000 1000
 		//
-		state->raise( Information_Level, Hardware_Sleep );
+		state->report( Information_Level, Hardware_Sleep );
 		//
 		//	Note,
 		//
@@ -6102,7 +6150,7 @@ public:
 		//
 		//	1111 1xxd dddd 1bbb
 		//
-		state->raise( Information_Level, Reserved_Instruction, opcode );
+		state->report( Information_Level, Reserved_Instruction, opcode );
 		//
 		//	What does the MCU do when it executes a reserved instruction?
 		//

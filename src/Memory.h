@@ -43,12 +43,12 @@ class Memory {
 		virtual word capacity( void ) = 0;
 
 		//
-		//	Provide the entry point for mapping memory segments
-		//	allowing them to maintain their 'real' location in
-		//	a global address space.
+		//	Insert new segment into mapped address space.
+		//
+		//	Default routine simply fails providing the safe default
+		//	action.
 		//
 		virtual bool segment( Memory *handler, word adrs ) { return( false ); }
-		virtual void shifted( word offset ) { return; }
 
 		//
 		//	Mechanism for examining content outside the

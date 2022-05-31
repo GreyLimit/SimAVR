@@ -81,6 +81,7 @@ class FusesCore : public Fuses {
 		//	to notify of attempts to modify the locked bits
 		//
 		Reporter	*_report;
+		int		_instance;
 		
 		//
 		//	Declare how many fuses and signature bytes we handle.
@@ -229,17 +230,18 @@ class FusesCore : public Fuses {
 			_sig[ sig_bytes ];
 
 	public:
-		FusesCore( Reporter *report ) {
+		FusesCore( Reporter *report, int instance ) {
 			for( int i = 0; i < fuse_bytes; i++ ) _fuse[ i ] = 0xFF;
 			for( int i = 0; i < sig_bytes; i++ ) _sig[ i ] = 0xFF;
 			_report = report;
+			_instance = instance;
 		}
 		//
 		//	Read a fuse byte..
 		//
 		virtual byte read( word adrs ) {
 			if( adrs >= fuse_bytes ) {
-				_report->raise( Error_Level, Fuse_Module, Address_OOR, adrs );
+				_report->report( Error_Level, Fuse_Module, _instance, Address_OOR, "Invalid Fuse index %d", (int)adrs );
 				return( 0xFF );
 			}
 			return( _fuse[ adrs ]);
@@ -248,11 +250,11 @@ class FusesCore : public Fuses {
 			byte	rb;
 			
 			if( adrs >= fuse_bytes ) {
-				_report->raise( Error_Level, Fuse_Module, Address_OOR, adrs );
+				_report->report( Error_Level, Fuse_Module, _instance, Address_OOR, "Invalid Fuse index %d", (int)adrs );
 				return;
 			}
 			if(( adrs == lock_bits )&& Locks_Locked()) {
-				_report->raise( Error_Level, Fuse_Module, Read_Only );
+				_report->report( Error_Level, Fuse_Module, _instance, Read_Only );
 				return;
 			}
 			//
@@ -260,7 +262,9 @@ class FusesCore : public Fuses {
 			//	programmed, it cannot be reset without a
 			//	full chip reset and re-program.
 			//
-			if(( rb = ( ~_fuse[ adrs ] & value )) != 0 ) _report->raise( Error_Level, Fuse_Module, Restore_Invalid, adrs, rb );
+			if(( rb = ( ~_fuse[ adrs ] & value )) != 0 ) {
+				if( _report->report( Error_Level, Fuse_Module, _instance, Restore_Invalid, "Reset programmed bits %d in Fuse %d?", (int)rb, (int)adrs )) return;
+			}
 			_fuse[ adrs ] &= value;
 		}
 		
@@ -279,7 +283,7 @@ class FusesCore : public Fuses {
 		//
 		virtual byte read_sig( word adrs ) {
 			if( adrs >= sig_bytes ) {
-				_report->raise( Error_Level, Fuse_Module, Address_OOR, adrs );
+				_report->report( Error_Level, Fuse_Module, _instance, Address_OOR, "Invalid Fuse index %d", (int)adrs );
 				return( 0xFF );
 			}
 			return( _sig[ adrs ]);

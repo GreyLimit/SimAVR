@@ -145,7 +145,7 @@ class Programmer : public Tick, Notification {
 //
 //	The Self Programming Class
 //
-template< word instance, byte irq_number > class ProgrammerDevice : public Programmer {
+template< byte irq_number > class ProgrammerDevice : public Programmer {
 	public:
 		//
 		//	This is the handle that the DeviceRegister will use
@@ -169,6 +169,7 @@ template< word instance, byte irq_number > class ProgrammerDevice : public Progr
 		Fuses		*_config;
 		AVR_CPU		*_mcu;
 		Reporter	*_report;
+		int		_instance;
 
 		//
 		//	Save the details of the Flash memory we are
@@ -289,7 +290,7 @@ template< word instance, byte irq_number > class ProgrammerDevice : public Progr
 					//	Anything else is invalid and ignored, though
 					//	we will report this as an error.
 					//
-					_report->raise( Error_Level, Programmer_Module, Parameter_Invalid, value );
+					_report->report( Error_Level, Programmer_Module, _instance, Parameter_Invalid, "Invalid SPMCSR value $%02X", (int)value );
 					_pm_mode = PM_EMPTY;
 					_action_counter_pending = 0;
 					break;
@@ -318,7 +319,7 @@ template< word instance, byte irq_number > class ProgrammerDevice : public Progr
 		//	Constructor.
 		//	------------
 		//
-		ProgrammerDevice( Reporter *report, Flash *flash, AVR_CPU *mcu, Interrupts *irq_handler, Clock *clock, Fuses *fuses ) {
+		ProgrammerDevice( Reporter *report, int instance, Flash *flash, AVR_CPU *mcu, Interrupts *irq_handler, Clock *clock, Fuses *fuses ) {
 			//
 			//	Empty the control register
 			//
@@ -329,6 +330,7 @@ template< word instance, byte irq_number > class ProgrammerDevice : public Progr
 			//	Save the link to the external systems.
 			//
 			_report = report;
+			_instance = instance;
 			_flash = flash;
 			_mcu = mcu;
 			_irq = irq_handler;
@@ -430,7 +432,7 @@ template< word instance, byte irq_number > class ProgrammerDevice : public Progr
 					//
 					//	This was an invalid call to SPM
 					//
-					_report->raise( Warning_Level, Programmer_Module, Parameter_Invalid, _spmcsr );
+					_report->report( Warning_Level, Programmer_Module, _instance, Parameter_Invalid, "SPMCSR value $%02X unrecognised by SPM", (int)_spmcsr );
 					break;
 				}
 			}
@@ -461,7 +463,7 @@ template< word instance, byte irq_number > class ProgrammerDevice : public Progr
 					//
 					//	This was an invalid call to LPM
 					//
-					_report->raise( Warning_Level, Programmer_Module, Parameter_Invalid );
+					_report->report( Warning_Level, Programmer_Module, _instance, Parameter_Invalid, "SPMCSR value $%02X unrecognised by LPM", (int)_spmcsr );
 					break;
 				}
 			}

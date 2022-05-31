@@ -23,7 +23,7 @@
 //
 //	The flash memory class.
 //
-template< int instance, word _page_size, word _page_count, word _boot_pages, word _op_duration > class Program : public Flash {
+template< word _page_size, word _page_count, word _boot_pages, word _op_duration > class Program : public Flash {
 	private:
 		//
 		//	Define the total number of words the flash memory
@@ -75,6 +75,7 @@ template< int instance, word _page_size, word _page_count, word _boot_pages, wor
 		//	Where we send Exceptions
 		//
 		Reporter	*_report;
+		int		_instance;
 
 		//
 		//	Helper routines for conversion from text
@@ -102,8 +103,9 @@ template< int instance, word _page_size, word _page_count, word _boot_pages, wor
 		//
 		//	Constructor
 		//
-		Program( Reporter *handler ) {
+		Program( Reporter *handler, int instance ) {
 			_report = handler;
+			_instance = instance;
 			for( dword a = 0; a < total; _storage[ a++ ] = 0 );
 			for( word w = 0; w < _page_size; _buffer[ w++ ] = ~((word)0 ));
 			_locked = false;
@@ -143,7 +145,7 @@ template< int instance, word _page_size, word _page_count, word _boot_pages, wor
 			//	Start by getting the file..
 			//
 			if(( source = fopen( filename, "r" )) == NULL ) {
-				_report->raise( Error_Level, Program_Module, File_Open_Failed, instance, filename );
+				_report->report( Error_Level, Program_Module, _instance, File_Open_Failed, "Cannot open file '%s'", filename );
 				return( false );
 			}
 
@@ -256,7 +258,7 @@ template< int instance, word _page_size, word _page_count, word _boot_pages, wor
 							//
 							//	Just too big, raise error and bail out.
 							//
-							_report->raise( Error_Level, Program_Module, Line_Too_Long, instance, "Line too long", line );
+							_report->report( Error_Level, Program_Module, _instance, Line_Too_Long, "Line %d too long (maximum %d bytes)", line, available );
 							fclose( source );
 							return( false );
 						}
@@ -269,7 +271,7 @@ template< int instance, word _page_size, word _page_count, word _boot_pages, wor
 					//	eg/	:00,01FF
 					//
 					if( available <= record_data ) {
-						_report->raise( Error_Level, Program_Module, Format_Error, line );
+						_report->report( Error_Level, Program_Module, _instance, Format_Error, "Line %d truncated", line );
 						fclose( source );
 						return( false );
 					}
@@ -291,7 +293,7 @@ template< int instance, word _page_size, word _page_count, word _boot_pages, wor
 					for( word i = 0; i < available; sum += decoded[ i++ ]);
 					sum = ( ~sum + 1 ) & 0xff;
 					if( sum != decoded[ available ]) {
-						_report->raise( Error_Level, Program_Module, Checksum_Error, instance, "Checksum error", line );
+						_report->report( Error_Level, Program_Module, _instance, Checksum_Error, "Line %d, checksum error", line );
 						fclose( source );
 						return( false );
 					}
@@ -300,7 +302,7 @@ template< int instance, word _page_size, word _page_count, word _boot_pages, wor
 					//	Record length w.r.t. count:
 					//
 					if(( count = decoded[ record_count ]) != ( available - record_data )) {
-						_report->raise( Error_Level, Program_Module, Format_Error, instance, "Format error in line", line );
+						_report->report( Error_Level, Program_Module, _instance, Format_Error, "Line %d, record size inconsistent", line );
 						fclose( source );
 						return( false );
 					}
@@ -340,7 +342,7 @@ template< int instance, word _page_size, word _page_count, word _boot_pages, wor
 								//	In range?
 								//
 								if( wide_adrs >= total ) {
-									_report->raise( Error_Level, Program_Module, Program_Too_Big, instance, "Program too large", line );
+									_report->report( Error_Level, Program_Module, _instance, Program_Too_Big, "Line %d, program too large at address $%06X", line, (int)wide_adrs );
 									fclose( source );
 									return( false );
 								}
@@ -361,7 +363,7 @@ template< int instance, word _page_size, word _page_count, word _boot_pages, wor
 								//	Move to next address
 								//
 								if( ++adrs == 0x0000 ) {
-									_report->raise( Error_Level, Program_Module, Address_Wraps, instance, "Program address wraps", line );
+									_report->report( Error_Level, Program_Module, _instance, Address_Wraps, "Line %d, program address wraps to 0", line );
 									fclose( source );
 									return( false );
 								}
@@ -384,7 +386,7 @@ template< int instance, word _page_size, word _page_count, word _boot_pages, wor
 							//	02	Extended Segment Address
 							//
 							if( count != 2 ) {
-								_report->raise( Error_Level, Program_Module, Format_Error, instance, "Format error in segment address", line );
+								_report->report( Error_Level, Program_Module, _instance, Format_Error, "Line %d, segment address format error", line );
 								fclose( source );
 								return( false );
 							}
@@ -395,15 +397,16 @@ template< int instance, word _page_size, word _page_count, word _boot_pages, wor
 							//
 							//	03	Start Segment Address
 							//
-							_report->raise( Error_Level, Program_Module, Not_Implemented, __FILE__, __LINE__ );
-							break;
+							_report->report( Error_Level, Program_Module, _instance, Not_Implemented, "Line %d, start segment address not implemented", line );
+							fclose( source );
+							return( false );
 						}
 						case 0x04: {
 							//
 							//	04	Extended Linear Address
 							//
 							if( count != 2 ) {
-								_report->raise( Error_Level, Program_Module, Format_Error, line );
+								_report->report( Error_Level, Program_Module, _instance, Format_Error, "Line %d, extended address format error", line );
 								fclose( source );
 								return( false );
 							}
@@ -415,14 +418,15 @@ template< int instance, word _page_size, word _page_count, word _boot_pages, wor
 							//	05	Start Linear Address
 							//	
 							//
-							_report->raise( Error_Level, Program_Module, Not_Implemented, __FILE__, __LINE__ );
-							break;
+							_report->report( Error_Level, Program_Module, _instance, Not_Implemented, "Line %d, start linear address not implemented", line );
+							fclose( source );
+							return( false );
 						}
 						default: {
 							//
 							//	Unrecognised Record Number.
 							//
-							_report->raise( Error_Level, Program_Module, Record_Error, instance, "Unrecognised record number", line );
+							_report->report( Error_Level, Program_Module, _instance, Record_Error, "Line %d, unrecognised record number", line );
 							fclose( source );
 							return( false );
 						}
@@ -434,7 +438,7 @@ template< int instance, word _page_size, word _page_count, word _boot_pages, wor
 			//	If we get here then there was no end of file
 			//	record, which is an error in its own right.
 			//
-			_report->raise( Error_Level, Program_Module, Program_Truncated, instance, "End of program missing", line );
+			_report->report( Error_Level, Program_Module, _instance, Program_Truncated, "Line %d, end of program missing", line );
 			fclose( source );
 			return( false );
 		}
@@ -449,10 +453,10 @@ template< int instance, word _page_size, word _page_count, word _boot_pages, wor
 		//
 		virtual word read( dword adrs ) {
 			if( adrs >= total ) {
-				_report->raise( Error_Level, Program_Module, Address_OOR, adrs );
+				_report->report( Error_Level, Program_Module, _instance, Address_OOR, "Address $%06X outside program space", (int)adrs );
 				return( 0 );
 			}
-			if( _locked && (( adrs < application ) == _application )) _report->raise( Error_Level, Program_Module, Write_Only, adrs );
+			if( _locked && (( adrs < application ) == _application )) _report->report( Error_Level, Program_Module, _instance, Write_Only, "Address $%06X set WRITE ONLY", (int)adrs );
 			return( _storage[ adrs ]);
 		}
 
@@ -479,7 +483,7 @@ template< int instance, word _page_size, word _page_count, word _boot_pages, wor
 		virtual word place( word adrs, word value ) {
 			_pending = None_Pending;
 			if( adrs >= _page_size ) {
-				_report->raise( Error_Level, Program_Module, Address_OOR, adrs, value );
+				_report->report( Error_Level, Program_Module, _instance, Address_OOR, "Write to buffer address $%04X invalid", (int)adrs );
 				return( 0 );
 			}
 			_buffer[ adrs ] &= value;
@@ -509,7 +513,7 @@ template< int instance, word _page_size, word _page_count, word _boot_pages, wor
 				//	We are write locked, and where we are locked is not the
 				//	same place we are writing now..
 				//
-				_report->raise( Error_Level, Program_Module, Write_Invalid, page );
+				_report->report( Error_Level, Program_Module, _instance, Write_Invalid, "Cannot erase READ ONLY page $%04X", (int)page );
 			}
 			_pending = Erase_Pending;
 			_target = page;
@@ -527,7 +531,7 @@ template< int instance, word _page_size, word _page_count, word _boot_pages, wor
 				//	We are write locked, and where we are locked is not the
 				//	same place we are writing now..
 				//
-				_report->raise( Error_Level, Program_Module, Write_Invalid, page );
+				_report->report( Error_Level, Program_Module, _instance, Write_Invalid, "Cannot update READ ONLY page $%04X", (int)page );
 			}
 			_pending = Write_Pending;
 			_target = page;

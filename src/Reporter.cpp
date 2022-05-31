@@ -61,6 +61,7 @@ typedef struct {
 } LevelName;
 
 static LevelName levels[] = {
+	{ Ignore_level,		"Ignore"	},
 	{ Debug_Level,		"Debug"		},
 	{ Information_Level,	"Information"	},
 	{ Warning_Level,	"Warning"	},
@@ -158,7 +159,7 @@ char *Reporter::exception_name( Exception cause, char *buffer, int len ) {
 //
 //	All three above, combined.
 //
-char *Reporter::description( Level lvl, Modules module, Exception cause, char *buffer, int len ) {
+char *Reporter::description( Level lvl, Modules module, int instance, Exception cause, char *buffer, int len ) {
 
 	static const int max_lvl = 15;
 	static const int max_module = 15;
@@ -168,8 +169,9 @@ char *Reporter::description( Level lvl, Modules module, Exception cause, char *b
 		module_desc[ max_module ],
 		exception_desc[ max_exception ];
 
-	snprintf( buffer, len, "%s/%s/%s",	level_name( lvl, lvl_desc, max_lvl ),
+	snprintf( buffer, len, "%s/%s.%d/%s",	level_name( lvl, lvl_desc, max_lvl ),
 						module_name( module, module_desc, max_module ),
+						instance,
 						exception_name( cause, exception_desc, max_exception ));
 	return( buffer );
 }

@@ -18,36 +18,38 @@
 
 static class ValidationReporter : public Reporter {
 	private:
-		bool	_tripped;
+		const int	max_buffer = 128;
+		bool		_tripped;
 	public:
 		ValidationReporter( void ) {
 			_tripped = false;
 		}
-		virtual bool raise( Level lvl, Modules from, Exception number ){ ABORT(); return( true ); }		
-		virtual bool raise( Level lvl, Modules from, Exception number, word arg ) { ABORT(); return( true ); }
-		virtual bool raise( Level lvl, Modules from, Exception number, dword arg1, word arg2 ) { ABORT(); return( true ); }
-		virtual bool raise( Level lvl, Modules from, Exception number, int instance, const char *mesg ) { ABORT(); return( true ); }
-		virtual bool raise( Level lvl, Modules from, Exception number, int instance, const char *mesg, word arg ) { ABORT(); return( true ); }
-		
-		virtual bool raise( Level lvl, Modules from, Exception number, const char *file, word line ) {
+		virtual bool report( Level lvl, Modules from, int instance, Exception number ) {
 			ASSERT( lvl == Validation_Level );
 			ASSERT( from == Validation_Module );
-			switch( number ) {
-				case Abort_Simulation: {
-					fprintf( stderr, "System Abort: Module \"%s\" line %d\n", file, line );
-					abort();
-					break;
-				}
-				case Assertion_Failure: {
-					fprintf( stderr, "Assert Failure: Module \"%s\" line %d\n", file, line );
-					abort();
-					break;
-				}
-				default: {
-					ABORT();
-					break;
-				}
-			}
+			ASSERT( instance == 0 );
+			ASSERT(( number == Abort_Simulation )||( number == Assertion_Failure ));
+			
+			char		buffer[ max_buffer ];
+			
+			fprintf( stderr, "[%s]\n", description( lvl, from, instance, number, buffer, max_buffer ));
+			abort();
+			return( true );
+		}		
+		virtual bool report( Level lvl, Modules from, int instance, Exception number, const char *fmt, ... ) {
+			ASSERT( lvl == Validation_Level );
+			ASSERT( from == Validation_Module );
+			ASSERT( instance == 0 );
+			ASSERT(( number == Abort_Simulation )||( number == Assertion_Failure ));
+
+			char		buffer[ max_buffer ];
+			va_list		args;
+			
+			va_start( args, fmt );
+			fprintf( stderr, "[%s] ", description( lvl, from, instance, number, buffer, max_buffer ));
+			vfprintf( stderr, fmt, args );
+			fprintf( stderr, "\n" );
+			abort();
 			return( true );
 		}
 		virtual bool exception( void ) {

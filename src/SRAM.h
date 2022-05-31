@@ -22,6 +22,7 @@ template< word size > class SRAM : public Memory {
 		//	Where we send errors..
 		//
 		Reporter	*_report;
+		int		_instance;
 		
 		//
 		//	The Memory area and a single byte used to
@@ -35,8 +36,9 @@ template< word size > class SRAM : public Memory {
 		//	Constructor, do not allocate 64 KBytes RAM,
 		//	this constructor will fail!
 		//
-		SRAM( Reporter *handler ) {
+		SRAM( Reporter *handler, int instance ) {
 			_report = handler;
+			_instance = instance;
 			for( word i = 0; i < size; _ram[ i++ ]);
 		}
 		//
@@ -44,14 +46,14 @@ template< word size > class SRAM : public Memory {
 		//
 		virtual byte read( word adrs ) {
 			if( adrs >= size ) {
-				_report->raise( Error_Level, SRAM_Module, Address_OOR, adrs );
+				_report->report( Error_Level, SRAM_Module, _instance, Address_OOR, "Reading invalid SRAM address $%04X", (int)adrs );
 				return( 0 );
 			}
 			return( _ram[ adrs ]);
 		}
 		virtual void write( word adrs, byte value ) {
 			if( adrs >= size ) {
-				_report->raise( Error_Level, SRAM_Module, Address_OOR, adrs );
+				_report->report( Error_Level, SRAM_Module, _instance, Address_OOR, "Writing invalid SRAM address $%04X", (int)adrs );
 				return;
 			}
 			_ram[ adrs ] = value;
@@ -71,7 +73,7 @@ template< word size > class SRAM : public Memory {
 			byte	v;
 			
 			if( adrs >= size ) {
-				_report->raise( Error_Level, SRAM_Module, Address_OOR, adrs );
+				_report->report( Error_Level, SRAM_Module, _instance, Address_OOR, "Modifying invalid SRAM address $%04X", (int)adrs );
 				return( 0 );
 			}
 			v = _ram[ adrs ];

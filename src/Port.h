@@ -26,73 +26,46 @@ class Port : public Notification {
 		static const word DDRn = 1;
 		static const word PORTn = 2;
 
-		//
-		//	Code to attach a pin to a place in a port.
-		//
-		virtual void attach( Pin *pin, byte bit ) = 0;
-		
-		//
-		//	Return the address of the PIN object at a specified
-		//	bit location.
-		//
-		virtual Pin *raw( byte bit ) = 0;
-
-		//
-		//	The device register interface.
-		//
-		virtual byte read_register( word id ) = 0;
-		virtual void write_register( word id, byte value ) = 0;
-		//
-		//	Mechanism for examining content outside the
-		//	framework of the simulation.
-		//
-		virtual bool examine( word id, Symbols *labels, char *buffer, int max ) = 0;
-};
-
-//
-//	The actual, configurable, port device.
-//
-template< word instance > class PortDevice : public Port {
 	private:
 		//
 		//	Where reports go...
 		//
 		Reporter	*_report;
+		int		_instance;
 		//
 		//	Define out port details.
 		//
 		static const word port_pins = 8;
 		Pin		*_pin[ port_pins ];
+
+		//
+		//	Convert instance number to letter.
+		//
+		inline char name( int id ) {
+			return( 'A' + id );
+		}
 		
 	public:
 		//
 		//	Constructor.
 		//
-		PortDevice( Reporter *report ) {
+		Port( Reporter *report, int instance ) {
 			_report = report;
+			_instance = instance;
 			for( int i = 0; i < port_pins; _pin[ i++ ] = NULL );
 		}
 
 		//
 		//	Code to attach a pin to a place in a port.
 		//
-		virtual void attach( Pin *pin, byte bit ) {
+		void attach( Pin *pin, byte bit ) {
 			ASSERT( pin != NULL );
 			ASSERT( bit < port_pins );
 			ASSERT( _pin[ bit ] == NULL );
-			_report->raise( Information_Level, Port_Module, Config_Change, instance, "New pin attached", bit );
+			_report->report( Ignore_level, Port_Module, _instance, Config_Change, "Port %c, new pin at bit %d", name( _instance ), (int)bit );
 			_pin[ bit ] = pin;
 		}
 		
-		//
-		//	Return the address of the PIN object at a specified
-		//	bit location.
-		//
-		virtual Pin *raw( byte bit ) {
-			ASSERT( bit < port_pins );
-			return( _pin[ bit ]);
-		}
-
 		//
 		//	The device register API.
 		//	========================
@@ -109,7 +82,7 @@ template< word instance > class PortDevice : public Port {
 							if( _pin[ i ]->get_PIN()) res |= bit;
 						}
 						else {
-							_report->raise( Warning_Level, Port_Module, Device_Missing, instance, "Incomplete pin", i );
+							_report->report( Warning_Level, Port_Module, _instance, Device_Missing, "PIN%c, reading missing bit %d", name( _instance ), i );
 						}
 						bit <<= 1;
 					}
@@ -127,7 +100,7 @@ template< word instance > class PortDevice : public Port {
 							}
 						}
 						else {
-							_report->raise( Warning_Level, Port_Module, Device_Missing, instance, "Incomplete pin", i );
+							_report->report( Warning_Level, Port_Module, _instance, Device_Missing, "DDR%c, reading missing bit %d", name( _instance ), i );
 						}
 						bit <<= 1;
 					}
@@ -145,7 +118,7 @@ template< word instance > class PortDevice : public Port {
 							}
 						}
 						else {
-							_report->raise( Warning_Level, Port_Module, Device_Missing, instance, "Incomplete pin", i );
+							_report->report( Warning_Level, Port_Module, _instance, Device_Missing, "PORT%c, reading missing bit %d", name( _instance ), i );
 						}
 						bit <<= 1;
 					}
@@ -169,7 +142,7 @@ template< word instance > class PortDevice : public Port {
 							_pin[ i ]->set_PIN( value & bit );
 						}
 						else {
-							_report->raise( Warning_Level, Port_Module, Device_Missing, instance, "Incomplete pin", i );
+							_report->report( Warning_Level, Port_Module, _instance, Device_Missing, "PIN%c, write missing bit %d", name( _instance ), i );
 						}
 						bit <<= 1;
 					}
@@ -184,7 +157,7 @@ template< word instance > class PortDevice : public Port {
 							_pin[ i ]->set_DDR( value & bit );
 						}
 						else {
-							_report->raise( Warning_Level, Port_Module, Device_Missing, instance, "Incomplete pin", i );
+							_report->report( Warning_Level, Port_Module, _instance, Device_Missing, "DDR%c, write missing bit %d", name( _instance ), i );
 						}
 						bit <<= 1;
 					}
@@ -199,7 +172,7 @@ template< word instance > class PortDevice : public Port {
 							_pin[ i ]->set_PORT( value & bit );
 						}
 						else {
-							_report->raise( Warning_Level, Port_Module, Device_Missing, instance, "Incomplete pin", i );
+							_report->report( Warning_Level, Port_Module, _instance, Device_Missing, "PORT%c, write missing bit %d", name( _instance ), i );
 						}
 						bit <<= 1;
 					}
@@ -232,7 +205,7 @@ template< word instance > class PortDevice : public Port {
 						}
 					}
 					bit[ port_pins ] = EOS;
-					snprintf( buffer, max, "PIN%c=%s", ( 'A' + instance ), bit );
+					snprintf( buffer, max, "PIN%c=%%%s", name( _instance ), bit );
 					return( true );
 				}
 				case DDRn: {
@@ -247,7 +220,7 @@ template< word instance > class PortDevice : public Port {
 						}
 					}
 					bit[ port_pins ] = EOS;
-					snprintf( buffer, max, "DDR%c=%s", ( 'A' + instance ), bit );
+					snprintf( buffer, max, "DDR%c=%%%s", name( _instance ), bit );
 					return( true );
 				}
 				case PORTn: {
@@ -262,7 +235,7 @@ template< word instance > class PortDevice : public Port {
 						}
 					}
 					bit[ port_pins ] = EOS;
-					snprintf( buffer, max, "PORT%c=%s", ( 'A' + instance ), bit );
+					snprintf( buffer, max, "PORT%c=%%%s", name( _instance ), bit );
 					return( true );
 				}
 				default: {

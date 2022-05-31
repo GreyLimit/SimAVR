@@ -18,7 +18,8 @@ class BreakPoint {
 		//
 		struct breakpoint {
 			int		index;
-			dword		address;
+			dword		starts,
+					ends;
 			breakpoint	*next;
 		};
 		//
@@ -49,17 +50,50 @@ class BreakPoint {
 		//	(1..n) if this is a valid break point or 0 if not.
 		//
 		int check( dword adrs ) {
-			for( breakpoint *p = _active; p != NULL; p = p->next ) if( adrs == p->address ) return( p->index );
+			for( breakpoint *p = _active; p != NULL; p = p->next ) {
+				if(( adrs >= p->starts )&&( adrs < p->ends )) return( p->index );
+			}
 			return( 0 );
 		}
 		//
-		//	Add a new breakpoint and return its number
-		//	or 0 on failure.
+		//	Add a new breakpoint and return its number or 0 on failure.
 		//
-		int add( dword adrs ) {
-			breakpoint *p;
-			
-			for( p = _active; p != NULL; p = p->next ) if( adrs == p->address ) return( p->index );
+		//	With the addition of 'ranges' of break addresses, this mechanism
+		//	has to become more complex.  A new range can over lap one (or more)
+		//	existing ranges.  The solution is (actually) simple:  Any ranges
+		//	that are overlapped extend the new range (if necessary) and are then
+		//	deleted.  At the end of the routine the new (modified) range is
+		//	created and returned.
+		//
+		int add( dword starts, dword ends ) {
+			breakpoint	**a,
+					*p;
+			bool		d;
+
+			ASSERT( starts < ends );
+			a = &_active;
+			while(( p = *a ) != NULL ) {
+				d = false;
+				if(( starts >= p->starts )&&( starts < p->ends )) {
+					starts = p->starts;
+					d = true;
+				}
+				if(( ends > p->starts )&&( ends <= p->ends )) {
+					ends = p->ends;
+					d = true;
+				}
+				if(( starts < p->starts )&&( ends > p->ends )) {
+					d = true;
+				}
+				if( d ) {
+					*a = p->next;
+					p->next = _inactive;
+					_inactive = p;
+				}
+				else {
+					a = &( p->next );
+				}
+			}
 			if(( p = _inactive )) {
 				_inactive = _inactive->next;
 			}
@@ -67,7 +101,8 @@ class BreakPoint {
 				p = new breakpoint;
 			}
 			p->index = _next++;
-			p->address = adrs;
+			p->starts = starts;
+			p->ends = ends;
 			p->next = _active;
 			_active = p;
 			return( p->index );
@@ -94,9 +129,15 @@ class BreakPoint {
 		//	~0 on error (rather than 0, which is
 		//	a valid address).
 		//
-		dword address( int number ) {
-			for( breakpoint *p = _active; p != NULL; p = p->next ) if( number == p->index ) return( p->address );
-			return( ~0 );
+		bool address( int number, dword *starts, dword *ends ) {
+			for( breakpoint *p = _active; p != NULL; p = p->next ) {
+				if( number == p->index ) {
+					*starts = p->starts;
+					*ends = p->ends;
+					return( true );
+				}
+			}
+			return( false );
 		}
 		//
 		//	Finally, generate a list of all current break points

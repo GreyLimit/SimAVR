@@ -62,6 +62,7 @@ class Clock : public Notification {
 		//	Where we send reports.
 		//
 		Reporter	*_report;
+		int		_instance;
 		
 		//
 		//	The Clock pre-scale register
@@ -109,11 +110,12 @@ class Clock : public Notification {
 		//	in KHz.  This limits the "top speed" of the clock
 		//	to ~65MHz, which is faster than most MCUs.
 		//
-		Clock( Reporter *report, word khz ) {
+		Clock( Reporter *report, int instance, word khz ) {
 			//
 			//	Reporting to..
 			//
 			_report = report;
+			_instance = instance;
 			//
 			//	Start pre-scaler empty.
 			//
@@ -149,7 +151,7 @@ class Clock : public Notification {
 			p->target = dev;
 			p->handle = id;
 			if(( p->interval = _khz / khz ) == 0 ) {
-				_report->raise( Warning_Level, Clock_Module, Too_Fast, khz );
+				_report->report( Warning_Level, Clock_Module, _instance, Too_Fast, "Sub clock rate too fast (%d KHz)", khz );
 				p->interval = 1;
 			}
 			p->remaining = p->interval;
@@ -212,20 +214,22 @@ class Clock : public Notification {
 			return( _clkpr );
 		}
 		virtual void write_register( word id, byte value ) {
-			ASSERT( id == size_CLKPS );
+			ASSERT( id == CLKPR );
 			if( value == bit_CLKPCE ) {
 				_clkpr = bit_CLKPCE;
+				_report->report( Information_Level, Clock_Module, _instance, Config_Change, "CLKPS now writeable (value $%02X)", (int)_clkpr );
 				return;
 			}
 			if(( value & ~mask_CLKPS ) != 0 ) {
-				_report->raise( Warning_Level, Clock_Module, Parameter_Invalid, value );
+				_report->report( Warning_Level, Clock_Module, _instance, Parameter_Invalid, "Invalid CLKPS value $%02X", (int)value );
 				value &= mask_CLKPS;
 			}
 			if( _clkpr != bit_CLKPCE ) {
-				_report->raise( Warning_Level, Clock_Module, Read_Only, _clkpr );
+				_report->report( Warning_Level, Clock_Module, _instance, Read_Only, "CLKPS is read only (value $%02X)", (int)_clkpr );
 				return;
 			}
 			_clkpr = value;
+			_report->report( Information_Level, Clock_Module, _instance, Config_Change, "CLKPS new value $%02X", (int)_clkpr );
 		}
 		//
 		//	Mechanism for examining content outside the

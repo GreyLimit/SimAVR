@@ -119,6 +119,7 @@ class Coverage {
 		//	We will report through here.
 		//
 		Reporter		*_report;
+		int			_instance;
 
 		//
 		//	Define a routine to convert a raw address
@@ -151,9 +152,10 @@ class Coverage {
 		//
 		//	Start empty..
 		//
-		Coverage( Reporter *report ) {
+		Coverage( Reporter *report, int instance ) {
 			_data = NULL;
 			_report = report;
+			_instance = instance;
 		}
 
 		//
@@ -175,7 +177,6 @@ class Coverage {
 				abp = &( bp->next );
 			}
 			if(( bp == NULL )||( b_num < bp->number )) {
-				_report->raise( Information_Level, Coverage_Module, Address_OOR, 0, "New block number", b_num );
 				bp = new block_record;
 				bp->number = b_num;
 				for( word i = 0; i < block_size; bp->cons[ i++ ] = NULL );
@@ -189,7 +190,6 @@ class Coverage {
 			//	Verify require cons level exists
 			//
 			if(!( cp = bp->cons[ b_adrs ])) {
-				_report->raise( Information_Level, Coverage_Module, Address_OOR, 0, "New cons record", b_adrs );
 				cp = new cons_record;
 				for( word i = 0; i < cons_size; cp->page[ i++ ] = NULL );
 				bp->cons[ b_adrs ] = cp;
@@ -201,7 +201,6 @@ class Coverage {
 			//	Verify required page level exists
 			//
 			if(!( pp = cp->page[ c_adrs ])) {
-				_report->raise( Information_Level, Coverage_Module, Address_OOR, 0, "New page record", c_adrs );
 				pp = new page_record;
 				for( word i = 0; i < page_size; i++ ) 
 					for( word j = 0; j < access_modes; pp->address[ i ].count[ j++ ] = 0 );
@@ -217,9 +216,50 @@ class Coverage {
 		//
 		//	Dump coverage stats (so far)
 		//
-		void dump( FILE *to ) {
+		void dump( FILE *to, int *select, int selected ) {
+			ASSERT( to != NULL );
+			ASSERT( select != NULL );
+			ASSERT( selected > 0 );
+			
 			block_record *br;
-			printf( "Target\tExec\tJump\tCall\tData\tRead\tWrite\tStack\n" );
+			printf( "Target" );
+			for( int i = 0; i < selected; i++ ) {
+				switch( select[ i ]) {
+					case Execute_Access: {
+						printf( "\tExec" );
+						break;
+					}
+					case Jump_Access: {
+						printf( "\tJump" );
+						break;
+					}
+					case Call_Access:{
+						printf( "\tCall" );
+						break;
+					}
+					case Data_Access:{
+						printf( "\tData" );
+						break;
+					}
+					case Read_Access:{
+						printf( "\tRead" );
+						break;
+					}
+					case Write_Access:{
+						printf( "\tWrite" );
+						break;
+					}
+					case Stack_Access:{
+						printf( "\tStack" );
+						break;
+					}
+					default: {
+						ABORT();
+						break;
+					}
+				}
+			}
+			printf( "\n" );
 			for( br = _data; br; br = br->next ) {
 				for( word bi = 0; bi < block_size; bi++ ) {
 					cons_record *cr;
@@ -229,10 +269,10 @@ class Coverage {
 							if(( pr = cr->page[ ci ])) {
 								for( word pi = 0; pi < page_size; pi++ ) {
 									access_record *ar = &( pr->address[ pi ]);
-									for( int i = 0; i < access_modes; i++ ) {
-										if( ar->count[ i ]) {
+									for( int i = 0; i < selected; i++ ) {
+										if( ar->count[ select[ i ]]) {
 											fprintf( to, "%06X", (int)combine( br->number, bi, ci, pi ));
-											for( int j = 0; j < access_modes; printf( "\t%d", (int)ar->count[ j++ ]));
+											for( int j = 0; j < selected; printf( "\t%d", (int)ar->count[ select[ j++ ]]));
 											printf( "\n" );
 											break;
 										}

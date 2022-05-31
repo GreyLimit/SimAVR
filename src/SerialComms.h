@@ -29,10 +29,12 @@ class SerialComms : public Notification {
 		static const word UBRRnH = 5;
 		
 	private:
-		Reporter *_report;
+		Reporter	*_report;
+		int		_instance;
 	public:
-		SerialComms( Reporter *report ) {
+		SerialComms( Reporter *report, int instance ) {
 			_report = _report;
+			_instance = instance;
 		}
 		virtual byte read_register( word id ) {
 			switch( id ) {

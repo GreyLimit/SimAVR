@@ -114,6 +114,7 @@ template< byte last_irq > class InterruptDevice : public Interrupts {
 		//	Reporter..
 		//
 		Reporter	*_reporter;
+		int		_instance;
 		
 		//
 		//	array of interrupts pending.
@@ -126,8 +127,9 @@ template< byte last_irq > class InterruptDevice : public Interrupts {
 		//
 		//	Start empty.
 		//
-		InterruptDevice( Reporter *handler ) {
+		InterruptDevice( Reporter *handler, int instance ) {
 			_reporter = handler;
+			_instance = instance;
 			reset();
 		}
 
@@ -150,7 +152,7 @@ template< byte last_irq > class InterruptDevice : public Interrupts {
 				}
 			}
 			else {
-				_reporter->raise( Error_Level, Interrupt_Module,  Interrupt_OOR, number );
+				_reporter->report( Error_Level, Interrupt_Module, _instance, Interrupt_OOR, "IRQ number %d out of range", (int)number );
 			}
 		}
 
@@ -165,7 +167,7 @@ template< byte last_irq > class InterruptDevice : public Interrupts {
 				}
 			}
 			else {
-				_reporter->raise( Error_Level, Interrupt_Module, Interrupt_OOR, number );
+				_reporter->report( Error_Level, Interrupt_Module, _instance, Interrupt_OOR, "IRQ number %d out of range", (int)number );
 			}
 		}
 
@@ -208,7 +210,7 @@ template< byte last_irq > class InterruptDevice : public Interrupts {
 				}
 			}
 			else {
-				_reporter->raise( Error_Level, Interrupt_Module, Interrupt_OOR, number );
+				_reporter->report( Error_Level, Interrupt_Module, _instance, Interrupt_OOR, "IRQ number %d out of range", (int)number );
 			}
 		}
 		
@@ -223,7 +225,7 @@ template< byte last_irq > class InterruptDevice : public Interrupts {
 				}
 			}
 			else {
-				_reporter->raise( Error_Level, Interrupt_Module, Interrupt_OOR, number );
+				_reporter->report( Error_Level, Interrupt_Module, _instance, Interrupt_OOR, "IRQ number %d out of range", (int)number );
 			}
 		}
 

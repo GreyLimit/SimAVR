@@ -23,7 +23,7 @@ class Fuses_48 : public FusesPhaseOne {
 			return(( _fuse[ extended_fuse_byte ] & bit_SPMEN ) == 0 ); // Self programming enable?
 		}
 	public:
-		Fuses_48( Reporter *report, AVR_Processor mcu ) : FusesPhaseOne( report ) {
+		Fuses_48( Reporter *report, int instance, AVR_Processor mcu ) : FusesPhaseOne( report, instance ) {
 			//
 			//	Set up the signature bytes.
 			//

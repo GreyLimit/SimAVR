@@ -9,6 +9,12 @@
 #define _REPORTER_H_
 
 //
+//	System provided dependencies
+//
+#include <cstdio>
+#include <cstdarg>
+
+//
 //	Base Types
 //
 #include "Base.h"
@@ -39,7 +45,8 @@ typedef enum {
 //	Define the various levels which reports which can be submitted under.
 //
 typedef enum {
-	Debug_Level		= 0,
+	Ignore_level		= 0,
+	Debug_Level,
 	Information_Level,
 	Warning_Level,
 	Error_Level,
@@ -138,7 +145,7 @@ class Reporter {
 		//
 		//	All three above, combined.
 		//
-		char *description( Level lvl, Modules module, Exception cause, char *buffer, int len );
+		char *description( Level lvl, Modules module, int instance, Exception cause, char *buffer, int len );		
 
 	public:
 		//
@@ -147,12 +154,8 @@ class Reporter {
 		//	should terminate the action which caused the
 		//	issue.
 		//
-		virtual bool raise( Level lvl, Modules from, Exception number ) = 0;
-		virtual bool raise( Level lvl, Modules from, Exception number, word arg ) = 0;
-		virtual bool raise( Level lvl, Modules from, Exception number, dword arg1, word arg2 ) = 0;
-		virtual bool raise( Level lvl, Modules from, Exception number, int instance, const char *mesg ) = 0;
-		virtual bool raise( Level lvl, Modules from, Exception number, int instance, const char *mesg, word arg ) = 0;
-		virtual bool raise( Level lvl, Modules from, Exception number, const char *file, word line ) = 0;
+		virtual bool report( Level lvl, Modules from, int instance, Exception number ) = 0;
+		virtual bool report( Level lvl, Modules from, int instance, Exception number, const char *fmt, ... ) = 0;
 		//
 		//	Check if an exception has been raised (using above
 		//	routines).  Return true if any have since the last

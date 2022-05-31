@@ -20,7 +20,7 @@ class FusesPhaseOne : public FusesCore {
 		byte raw_bodlevel( void ) { return( extract<byte>( _fuse[ high_fuse_byte ], lsb_BODLEVEL, mask_BODLEVEL )); }
 
 	public:
-		FusesPhaseOne( Reporter *report ) : FusesCore( report ) {
+		FusesPhaseOne( Reporter *report, int instance ) : FusesCore( report, instance ) {
 		}
 		//
 		//	Decode fuse name
@@ -65,7 +65,7 @@ class FusesPhaseOne : public FusesCore {
 		virtual float BODLEVEL_Min( void ) {		// Minimum V_BOT
 			switch( raw_bodlevel()) {
 				case b111: {
-					_report->raise( Warning_Level, Fuse_Module, Feature_Disabled );
+					_report->report( Warning_Level, Fuse_Module, _instance, Feature_Disabled );
 					return( 0.0 );
 				}
 				case b110: return( 1.7 );
@@ -73,13 +73,13 @@ class FusesPhaseOne : public FusesCore {
 				case b100: return( 4.1 );
 				default:   break;
 			}
-			_report->raise( Warning_Level, Fuse_Module, Feature_Reserved );
+			_report->report( Warning_Level, Fuse_Module, _instance, Feature_Reserved );
 			return( 5.0 );
 		}
 		virtual float BODLEVEL_Typical( void ) {	// Typical V_BOT
 			switch( raw_bodlevel()) {
 				case b111: {
-					_report->raise( Warning_Level, Fuse_Module, Feature_Disabled );
+					_report->report( Warning_Level, Fuse_Module, _instance, Feature_Disabled );
 					return( 0.0 );
 				}
 				case b110: return( 1.8 );
@@ -87,13 +87,13 @@ class FusesPhaseOne : public FusesCore {
 				case b100: return( 4.3 );
 				default:   break;
 			}
-			_report->raise( Warning_Level, Fuse_Module, Feature_Reserved );
+			_report->report( Warning_Level, Fuse_Module, _instance, Feature_Reserved );
 			return( 5.0 );
 		}
 		virtual float BODLEVEL_Max( void ) {	// Maximum V_BOT
 			switch( raw_bodlevel()) {
 				case b111: {
-					_report->raise( Warning_Level, Fuse_Module, Feature_Disabled );
+					_report->report( Warning_Level, Fuse_Module, _instance, Feature_Disabled );
 					return( 0.0 );
 				}
 				case b110: return( 2.0 );
@@ -101,7 +101,7 @@ class FusesPhaseOne : public FusesCore {
 				case b100: return( 4.5 );
 				default:   break;
 			}
-			_report->raise( Warning_Level, Fuse_Module, Feature_Reserved );
+			_report->report( Warning_Level, Fuse_Module, _instance, Feature_Reserved );
 			return( 5.0 );
 		}
 		//

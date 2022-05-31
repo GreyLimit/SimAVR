@@ -36,6 +36,9 @@ typedef uint32_t	dword;
 //	Define come core constant values used across the program.
 //
 static const char EOS = 0;
+static const char PLUS = '+';
+static const char MINUS = '-';
+static const char COMMA = ',';
 
 //
 //	Provide some syntactic sugar to clarify coding.

@@ -15,6 +15,14 @@
 #include "Reporter.h"
 
 //
+//	Declare a call back class for detecting pin changes
+//
+class PinUpdate {
+	public:
+		virtual void pin_change( word pin, bool value ) = 0;
+};
+
+//
 //	The Pin Class
 //
 class Pin {
@@ -28,6 +36,11 @@ class Pin {
 		//	Our pin number, for human reference.
 		//
 		word		_number;
+		
+		//
+		//	Our link to an upstream interested party.
+		//
+		PinUpdate	*_update;
 
 		//
 		//	Pin characteristics
@@ -43,6 +56,15 @@ class Pin {
 			_output = false;
 			_pullup = false;
 			_value = false;
+			_update = NULL;
+		}
+		//
+		//	Attach an interested party..
+		//
+		void attach( PinUpdate *party ) {
+			ASSERT( _update == NULL );
+			ASSERT( party != NULL );
+			_update = party;
 		}
 		//
 		//	We will implement the PIN API in the same way as the hardware..
@@ -51,7 +73,7 @@ class Pin {
 			return( _output );
 		}
 		void set_DDR( bool output ) {
-			if( output != _output ) _report->raise( Error_Level, Pin_Module, Config_Change, _number, "Change direction", ( output? 1: 0 ));
+			if( output != _output ) _report->report( Error_Level, Pin_Module, _number, Config_Change, "Change direction to %s", ( output? "OUT": "IN" ));
 			_output = output;
 		}
 			
@@ -60,11 +82,14 @@ class Pin {
 		}
 		void set_PORT( bool value ) {
 			if( _output ) {
-				if( value != _value ) _report->raise( Error_Level, Pin_Module, Config_Change, _number, "Change value", ( value? 1: 0 ));
-				_value = value;
+				if( value != _value ) {
+					_report->report( Error_Level, Pin_Module, _number, Config_Change, "Change value to %d", ( value? 1: 0 ));
+					_value = value;
+					if( _update ) _update->pin_change( _number, _value );
+				}
 			}
 			else {
-				if( value != _pullup ) _report->raise( Error_Level, Pin_Module, Config_Change, _number, "Change pullup", ( value? 1: 0 ));
+				if( value != _pullup ) _report->report( Error_Level, Pin_Module, _number, Config_Change, "Change pullup %s", ( value? "ON": "OFF" ));
 				_pullup = value;
 			}
 		}
@@ -75,7 +100,22 @@ class Pin {
 		void set_PIN( bool value ) {
 			if( value ) {
 				_value != _value;
-				_report->raise( Error_Level, Pin_Module, Config_Change, _number, "Toggle value", ( _value? 1: 0 ));
+				_report->report( Error_Level, Pin_Module, _number, Config_Change, "Toggle value to %d", ( _value? 1: 0 ));
+				if( _update ) _update->pin_change( _number, _value );
+			}
+		}
+		//
+		//	Finally get and set the "input" reading onto the pin.
+		//
+		bool get_value( void ) {
+			return( _value );
+		}
+		void set_value( bool value ) {
+			if( !_output ) {
+				if( _value != value ) {
+					_value = value;
+					if( _update ) _update->pin_change( _number, _value );
+				}
 			}
 		}
 };

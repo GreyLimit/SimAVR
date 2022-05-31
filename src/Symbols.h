@@ -49,6 +49,7 @@ class Symbols {
 		//	Errors go here.
 		//
 		Reporter	*_report;
+		int		_instance;
 		
 		//
 		//	Arbitrary input buffer size.
@@ -123,10 +124,10 @@ class Symbols {
 			if( strcmp( domain, "byte_register" ) == 0 ) return( byte_register );
 			if( strcmp( domain, "word_register" ) == 0 ) return( word_register );
 			if( strcmp( domain, "port_number" ) == 0 ) return( port_number );
-			(void)_report->raise( Error_Level, Symbols_Module, Record_Error );
+			(void)_report->report( Error_Level, Symbols_Module, _instance, Record_Error, "Symbol domain '%s' not recognised", domain );
 			return( unspecified_type );
 		}
-		const char *name_type ( symbol_type domain ) {
+		const char *name_type( symbol_type domain ) {
 			switch( domain ) {
 				case program_address: return( "program_address" );
 				case memory_address: return( "memory_address" );
@@ -138,11 +139,11 @@ class Symbols {
 				case word_register: return( "word_register" );
 				case port_number: return( "port_number" );
 				default: {
-					(void)_report->raise( Terminate_Level, Symbols_Module, Record_Error );
+					(void)_report->report( Terminate_Level, Symbols_Module, _instance, Record_Error, "Invalid symbol domain reference %d", domain );
 					break;
 				}
 			}
-			return( "unspecified_type" );
+			return( "unrecognised_type" );
 		}
 
 		//
@@ -191,10 +192,11 @@ class Symbols {
 		//
 		//	Build an empty object.
 		//
-		Symbols( Reporter *errors ) {
+		Symbols( Reporter *errors, int instance ) {
 			_by_value = NULL;
 			_by_name = NULL;
 			_report = errors;
+			_instance = instance;
 		}
 
 		//
@@ -204,7 +206,7 @@ class Symbols {
 			label	**adrs, *ptr, *rec;
 
 			if( ident_len( name ) != strlen( name )) {
-				_report->raise( Error_Level, Symbols_Module, Invalid_Identifier );
+				_report->report( Error_Level, Symbols_Module, _instance, Invalid_Identifier, "Invalid identifier '%s'", name );
 				return( false );
 			}
 			adrs = &_by_name;
@@ -395,7 +397,7 @@ class Symbols {
 				*ptr++ = EOS;
 
 				if(( l = find_label( type, string )) == NULL ) {
-					_report->raise( Error_Level, Symbols_Module, Invalid_Identifier );
+					_report->report( Error_Level, Symbols_Module, _instance, Invalid_Identifier, "Identifier '%s' not found in domain %s", string, name_type( type ));
 					return( false );
 				}
 				base = l->value;
@@ -413,7 +415,7 @@ class Symbols {
 						break;
 					}
 					default: {
-						_report->raise( Error_Level, Symbols_Module, Format_Error );
+						_report->report( Error_Level, Symbols_Module, _instance, Format_Error );
 						return( false );
 					}
 				}
@@ -436,14 +438,14 @@ class Symbols {
 			}
 			while( numeric( *ptr, &i )) {
 				if( i >= b ) {
-					_report->raise( Error_Level, Symbols_Module, Invalid_Number );
+					_report->report( Error_Level, Symbols_Module, _instance, Invalid_Number );
 					return( false );
 				}
 				sum = sum * b + i;
 				ptr++;
 			}
 			if( *ptr != EOS ) {
-				_report->raise( Error_Level, Symbols_Module, Format_Error );
+				_report->report( Error_Level, Symbols_Module, _instance, Format_Error );
 				return( false );
 			}
 			if( fix ) *fix = with;
@@ -489,7 +491,7 @@ class Symbols {
 					type = type_name( domain );
 					if( evaluate( type, expr, &value )) {
 						if( !new_label( name, type, value )) {
-							if( _report->raise( Error_Level, Symbols_Module, Record_Error, file, line )) {
+							if( _report->report( Error_Level, Symbols_Module, _instance, Record_Error, "Import error, file '%s', line %d", file, line )) {
 								fclose( source );
 								return ( false );
 							}
@@ -497,7 +499,7 @@ class Symbols {
 						}
 					}
 					else {
-						if( _report->raise( Error_Level, Symbols_Module, Invalid_Number, file, line )) {
+						if( _report->report( Error_Level, Symbols_Module, _instance, Invalid_Number, "Import error, file '%s', line %d", file, line )) {
 							fclose( source );
 							return( false );
 						}
@@ -518,7 +520,7 @@ class Symbols {
 
 			if( file == NULL ) return( false );
 			if(( to = fopen( file, "w" )) == NULL ) {
-				_report->raise( Error_Level, Symbols_Module, File_Open_Failed );
+				_report->report( Error_Level, Symbols_Module, _instance, File_Open_Failed );
 				return( false );
 			}
 			for( look = _by_name; look != NULL; look = look->next_by_name ) {
