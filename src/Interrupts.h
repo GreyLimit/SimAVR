@@ -63,19 +63,16 @@ class Interrupts {
 		virtual void reset( void ) = 0;
 
 		//
-		//	Raise an interrupt...
+		//	Raise an interrupt, and raise an interrupt
+		//	with an auto clear action.
 		//
 		virtual void raise( byte number ) = 0;
+		virtual void raise( byte number, byte *locn, byte flag ) = 0;		
 
 		//
 		//	Clear an interrupt...
 		//
 		virtual void clear( byte number ) = 0;
-
-		//
-		//	Wrapper routine for the raise/clear routines.
-		//
-		virtual void set( byte number, bool state ) = 0;
 
 		//
 		//	Find an active and raised interrupt, returns true if one found and
@@ -92,11 +89,6 @@ class Interrupts {
 		//	Unmask an interrupt (make active).
 		//
 		virtual void unmask( byte number ) = 0;
-
-		//
-		//	Wrapper routine from above mask/unmask routines.
-		//
-		virtual void set_mask( byte number, bool state ) = 0;
 };
 
 //
@@ -115,12 +107,22 @@ template< byte last_irq > class InterruptDevice : public Interrupts {
 		//
 		Reporter	*_reporter;
 		int		_instance;
+
+		//
+		//	An individual interrupt action.
+		//
+		struct status {
+			bool	pending,
+				active,
+				clear_flag;
+			byte	*locn,
+				flag;
+		};
 		
 		//
-		//	array of interrupts pending.
+		//	Array of interrupts pending.
 		//
-		bool	_pending[ total_irqs ],
-			_active[ total_irqs ];
+		status	_irq[ total_irqs ];
 		byte	_raised;
 
 	public:
@@ -137,7 +139,13 @@ template< byte last_irq > class InterruptDevice : public Interrupts {
 		//	Reset all interrupts
 		//
 		virtual void reset( void ) {
-			for( byte i = 0; i < total_irqs; _pending[ i++ ] = false );
+			for( byte i = 0; i < total_irqs; i++ ) {
+				_irq[ i ].pending = false;
+				_irq[ i ].active = true;
+				_irq[ i ].clear_flag = false;
+				_irq[ i ].locn = NULL;
+				_irq[ i ].flag = 0;
+			}
 			_raised = 0;
 		}
 
@@ -146,40 +154,50 @@ template< byte last_irq > class InterruptDevice : public Interrupts {
 		//
 		virtual void raise( byte number ) {
 			if(( number > 0 )&&( number < total_irqs )) {
-				if( !_pending[ number ]) {
-					_pending[ number ] = true;
-					if( _active[ number ]) _raised++;
+				status *irq = &( _irq[ number ]);
+				
+				if( !irq->pending ) {
+					irq->pending = true;
+					irq->clear_flag = false;
+					if( irq->active ) _raised++;
 				}
 			}
 			else {
 				_reporter->report( Error_Level, Interrupt_Module, _instance, Interrupt_OOR, "IRQ number %d out of range", (int)number );
 			}
 		}
+		virtual void raise( byte number, byte *locn, byte flag ) {
+			if(( number > 0 )&&( number < total_irqs )) {
+				status *irq = &( _irq[ number ]);
+				
+				if( !irq->pending ) {
+					irq->pending = true;
+					irq->clear_flag = true;
+					irq->locn = locn;
+					irq->flag = flag;
+					if( irq->active ) _raised++;
+				}
+			}
+			else {
+				_reporter->report( Error_Level, Interrupt_Module, _instance, Interrupt_OOR, "IRQ number %d out of range", (int)number );
+			}
+		}		
 
 		//
 		//	Clear an interrupt...
 		//
 		virtual void clear( byte number ) {
 			if(( number > 0 )&&( number < total_irqs )) {
-				if( _pending[ number ]) {
-					_pending[ number ] = false;
-					if( _active[ number ]) _raised--;
+				status *irq = &( _irq[ number ]);
+				
+				if( irq->pending ) {
+					irq->pending = false;
+					irq->clear_flag = false;
+					if( irq->active ) _raised--;
 				}
 			}
 			else {
 				_reporter->report( Error_Level, Interrupt_Module, _instance, Interrupt_OOR, "IRQ number %d out of range", (int)number );
-			}
-		}
-
-		//
-		//	Wrapper routine for the raise/clear routines.
-		//
-		virtual void set( byte number, bool state ) {
-			if( state ) {
-				raise( number );
-			}
-			else {
-				clear( number );
 			}
 		}
 
@@ -190,8 +208,11 @@ template< byte last_irq > class InterruptDevice : public Interrupts {
 		virtual bool find( byte *found ) {
 			if( _raised ) {
 				for( byte i = 1; i < total_irqs; i++ ) {
-					if( _active[ i ] && _pending[ i ]) {
+					status *irq = &( _irq[ i ]);
+				
+					if( irq->active && irq->pending ) {
 						*found = i;
+						if( irq->clear_flag ) *( irq->locn ) &= ~irq->flag;
 						return( true );
 					}
 				}
@@ -204,9 +225,11 @@ template< byte last_irq > class InterruptDevice : public Interrupts {
 		//
 		virtual void mask( byte number ) {
 			if(( number > 0 )&&( number < total_irqs )) {
-				if( _active[ number ]) {
-					_active[ number ] = false;
-					if( _pending[ number ]) _raised--;
+				status *irq = &( _irq[ number ]);
+				
+				if( irq->active ) {
+					irq->active = false;
+					if( irq->pending ) _raised--;
 				}
 			}
 			else {
@@ -219,25 +242,15 @@ template< byte last_irq > class InterruptDevice : public Interrupts {
 		//
 		virtual void unmask( byte number ) {
 			if(( number > 0 )&&( number < total_irqs )) {
-				if( !_active[ number ]) {
-					_active[ number ] = true;
-					if( _pending[ number ]) _raised++;
+				status *irq = &( _irq[ number ]);
+				
+				if( !irq->active ) {
+					irq->active = true;
+					if( irq->pending ) _raised++;
 				}
 			}
 			else {
 				_reporter->report( Error_Level, Interrupt_Module, _instance, Interrupt_OOR, "IRQ number %d out of range", (int)number );
-			}
-		}
-
-		//
-		//	Wrapper routine from above mask/unmask routines.
-		//
-		virtual void set_mask( byte number, bool state ) {
-			if( state ) {
-				mask( number );
-			}
-			else {
-				unmask( number );
 			}
 		}
 };

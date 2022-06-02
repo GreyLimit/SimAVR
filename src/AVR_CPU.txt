@@ -199,6 +199,12 @@ class AVR_CPU : public CPU, Notification, Tick {
 		//
 		static const word System_Clock = 0;
 		static const word WDT_Clock = 1;
+
+		//
+		//	The list of interrupt numbers the AVR CPU generates
+		//	directly.
+		//
+		static const byte WDT_IRQ_Number = 7;
 		
 	private:
 		//
@@ -396,6 +402,7 @@ class AVR_CPU : public CPU, Notification, Tick {
 		//
 		dword		_wdt_remaining,
 				_wdt_reset;
+		byte		_wdt_window;
 		bool		_wdt_enabled;
 
 	public:
@@ -524,6 +531,7 @@ class AVR_CPU : public CPU, Notification, Tick {
 			_wdtcsr = 0;
 			_wdt_remaining = 0;
 			_wdt_reset = 0;
+			_wdt_window = 0;
 			_wdt_enabled = false;
 			
 			//
@@ -1578,7 +1586,47 @@ class AVR_CPU : public CPU, Notification, Tick {
 					break;
 				}
 				case WDTCSR: {
-					_wdtcsr = value;
+					//
+					//	Bit	7	6	5	4	3	2	1	0
+					//	(0x60)	WDIF	WDIE	WDP3	WDCE	WDE	WDP2	WDP1	WDP0
+					//		R/W	R/W	R/W	R/W	R/W	R/W	R/W	R/W
+					//		0	0	0	0	X	0	0	0
+					//
+					//	Flag can always be cleared.
+					//
+					if( value & wdtcsr_WDIF ) _wdtcsr &= ~wdtcsr_WDIF;
+					//
+					//	Others require the Change Enable bit to be set.
+					//
+					if( _wdtcsr & wdtcsr_WDCE ) {
+						byte	ps;
+						
+						//
+						//	We can make a change
+						//
+						_wdtcsr |= value & ~( wdtcsr_WDCE | wdtcsr_WDIF );
+						ps = (( value >> 2 ) & 0x80 )|( value & 0x07 );
+						if( ps < 10 ) _wdt_reset = 2048 << ps;
+						//
+						//	Now report the new value..
+						//
+						_reporter->report( Information_Level, CPU_Module, _instance, Config_Change, "WDT Int Flag = %d", (int)(( _wdtcsr & wdtcsr_WDIF ) != 0 ));
+						_reporter->report( Information_Level, CPU_Module, _instance, Config_Change, "WDT Int Enable = %d", (int)(( _wdtcsr & wdtcsr_WDIE ) != 0 ));
+						_reporter->report( Information_Level, CPU_Module, _instance, Config_Change, "WDT cycles = %ld", (long int)_wdt_reset );
+					}
+					else {
+						//
+						//	Otherwise we can only do one thing.
+						//
+						if( value & wdtcsr_WDCE ) {
+							//
+							//	We have set this bit, so we start the
+							//	time window in which to update the register
+							//
+							_wdtcsr |= wdtcsr_WDCE;
+							_wdt_window = 4;
+						}
+					}
 					break;
 				}
 				default: {
@@ -1649,7 +1697,7 @@ class AVR_CPU : public CPU, Notification, Tick {
 				default: {
 					ASSERT( id < GPRegisters );
 					snprintf( buffer, max, "R%d = $%02X", (int)id, (int)_reg[ id ]);
-					break;
+					return( true );
 				}
 			}
 			return( false );
@@ -1663,11 +1711,38 @@ class AVR_CPU : public CPU, Notification, Tick {
 		virtual void tick( word id, bool inst_end );
 {BS}
 		void AVR_CPU::tick( word id, UNUSED( bool inst_end )) {
-			ASSERT( id == WDT_Clock );
-			//
-			//	We are only tracking clock ticks here because
-			//	the watch dog timer counts ticks.
-			//
+			switch( id ) {
+				case System_Clock: {
+					//
+					//	The system clock ticking.
+					//
+					if( _wdt_window ) {
+						if(( _wdt_window -= 1 ) == 0 ) {
+							_wdtcsr &= ~wdtcsr_WDCE;
+						}
+					}
+					break;
+				}
+				case WDT_Clock: {
+					//
+					//	The 128 KHz clock ticking.
+					//
+					if( _wdt_enabled ) {
+						if( --_wdt_remaining == 0 ) {
+							//
+							//	Raise watch dog interrupt.
+							//
+							_wdtcsr |= wdtcsr_WDIF;
+							_irqs->raise( WDT_IRQ_Number, &_wdtcsr, wdtcsr_WDIF );
+						}
+					}
+					break;
+				}
+				default: {
+					ABORT();
+					break;
+				}
+			}
 		}
 {B}
 

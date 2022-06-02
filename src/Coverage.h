@@ -214,6 +214,35 @@ class Coverage {
 		}
 
 		//
+		//	Clear the cached coverage data
+		//
+		void clear( void ) {
+			block_record *bp;
+			for( bp = _data; bp != NULL; bp = bp->next ) {
+				for( int b = 0; b < block_size; b++ ) {
+					cons_record *cp;
+					
+					if(( cp = bp->cons[ b ]) != NULL ) {
+						for( int c = 0; c < cons_size; c++ ) {
+							page_record *pp;
+
+							if(( pp = cp->page[ c ]) != NULL ) {
+								for( int a = 0; a < page_size; a++ ) {
+									access_record *ap = &( pp->address[ a ]);
+
+									for( int m = 0; m < access_modes; m++ ) {
+										ap->count[ m ] = 0;
+									}
+								}
+							}
+						}
+					}
+				}
+
+			}
+		}
+
+		//
 		//	Dump coverage stats (so far)
 		//
 		void dump( FILE *to, int *select, int selected ) {

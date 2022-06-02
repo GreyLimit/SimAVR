@@ -26,10 +26,11 @@ class Map : public Memory {
 		//	Internal Map structure.
 		//
 		struct component {
-			word		base,
-					size;
+			word		starts,
+					ends;
 			Memory		*handler;
-			component	*next;
+			component	*before,
+					*after;
 		};
 
 		//
@@ -44,8 +45,8 @@ class Map : public Memory {
 		int		_instance;
 
 		//
-		//	This is the pre-defined size of this map
-		//	segment.
+		//	This is the pre-defined maximum size of the
+		//	whole mapped segment.
 		//
 		word		_size;
 
@@ -53,10 +54,20 @@ class Map : public Memory {
 		//	Find the target segment...
 		//
 		component *find( word adrs ) {
-			component *ptr;
+			component *ptr = _segments;
 
-			for( ptr = _segments; ptr != NULL; ptr = ptr->next ) {
-				if(( adrs >= ptr->base )&&(( adrs - ptr->base ) < ptr->size )) return( ptr );
+			while( ptr ) {
+				if( adrs < ptr->starts ) {
+					ptr = ptr->before;
+				}
+				else {
+					if( adrs >= ptr->ends ) {
+						ptr = ptr->after;
+					}
+					else {
+						return( ptr );
+					}
+				}
 			}
 			return( NULL );
 		}
@@ -84,41 +95,52 @@ class Map : public Memory {
 			word		t = adrs + z;
 
 			//
+			//	Just make sure our assumption about the
+			//	start being before the end is true..
+			//
+			ASSERT( adrs < t );
+			
+			//
 			//	Verify segment inside map space
 			//
-			if( t > _size ) {
-				_report->report( Error_Level, Map_Module, _instance, Overlap_Error, "New segment at $%04X outside map", (int)adrs );
-				return( false );
-			}
+			if( t > _size ) return( !_report->report( Error_Level, Map_Module, _instance, Overlap_Error, "New segment at $%04X (%d bytes) outside map", (int)adrs, (int)z ));
+
 			//
-			//	Search segments to see where this new on fits.
+			//	Search segments to see where this new one fits.
 			//
-			for( a = &_segments; ( p = *a ) != NULL; a = &( p->next )) {
-				if(( adrs < p->base )&&( t <= p->base )) {
-					//
-					//	The whole of this block comes before
-					//	the block p, so we can add here.
-					//
-					break;
+			a = &_segments;
+			while(( p = *a )) {
+				if( t <= p->starts ) {
+					a = &( p->before );
 				}
-				if( adrs < ( p->base + p->size )) {
-					//
-					//	The start of this block is inside the
-					//	block at p, so we definitely cannot add
-					//	this block.
-					//
-					return( !_report->report( Error_Level, Map_Module, _instance, Overlap_Error, "New segment at $%04X overlaps existing segment", (int)adrs ));
+				else {
+					if( adrs >= p->ends ) {
+						a = &( p->after );
+					}
+					else {
+						return( !_report->report( Error_Level, Map_Module, _instance, Overlap_Error, "New segment at $%04X overlaps existing segment", (int)adrs ));
+					}
 				}
 			}
 			//
-			//	Create and insert a new record inside a.
+			//	Create and insert a new record at a.
 			//
 			p = new component;
-			p->base = adrs;
-			p->size = z;
+			p->starts = adrs;
+			p->ends = t;
 			p->handler = block;
-			p->next = *a;
+			p->before = NULL;
+			p->after = NULL;
 			*a = p;
+			//
+			//	For performance reasons the tree should be
+			//	re-balanced at this point, but perhaps this
+			//	isn't the best approach.  There is a good
+			//	argument for *dynamically* restructuring the
+			//	tree in the style of an LRU cache and so
+			//	optimising access times over time.
+			//
+			//	anyway ...
 			//
 			//	And confirm success.
 			//
@@ -128,7 +150,7 @@ class Map : public Memory {
 		virtual byte read( word adrs ) {
 			component *ptr;
 			
-			if(( ptr = find( adrs ))) return( ptr->handler->read( adrs - ptr->base ));
+			if(( ptr = find( adrs ))) return( ptr->handler->read( adrs - ptr->starts ));
 			_report->report( Warning_Level, Map_Module, _instance, Address_OOR, "Read address $%04X not in mapped segment", (int)adrs );
 			return( 0 );
 		}
@@ -136,14 +158,14 @@ class Map : public Memory {
 		virtual void write( word adrs, byte value ) {
 			component *ptr;
 			
-			if(( ptr = find( adrs ))) return( ptr->handler->write( adrs - ptr->base, value ));
+			if(( ptr = find( adrs ))) return( ptr->handler->write( adrs - ptr->starts, value ));
 			_report->report( Warning_Level, Map_Module, _instance, Address_OOR, "Write address $%04X not in mapped segment", (int)adrs );
 		}
 		
 		virtual byte modify( word adrs, byte clear, byte set, byte toggle ) {
 			component *ptr;
 			
-			if(( ptr = find( adrs ))) return( ptr->handler->modify( adrs - ptr->base, clear, set, toggle ));
+			if(( ptr = find( adrs ))) return( ptr->handler->modify( adrs - ptr->starts, clear, set, toggle ));
 			_report->report( Warning_Level, Map_Module, _instance, Address_OOR, "Modify address $%04X not in mapped segment", (int)adrs );
 			return( 0 );
 		}
@@ -155,7 +177,7 @@ class Map : public Memory {
 		virtual bool examine( word adrs, Symbols *labels, char *buffer, int max ) {
 			component *ptr;
 			
-			if(( ptr = find( adrs ))) return( ptr->handler->examine( adrs - ptr->base, labels, buffer, max ));
+			if(( ptr = find( adrs ))) return( ptr->handler->examine( adrs - ptr->starts, labels, buffer, max ));
 			_report->report( Warning_Level, Map_Module, _instance, Address_OOR, "Examine address $%04X not in mapped segment", (int)adrs );
 			return( false );
 		}

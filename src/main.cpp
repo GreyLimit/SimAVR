@@ -153,6 +153,7 @@ static CPU *atmega328p( Reporter *channel, Coverage *tracker, const char *load, 
 						//	not need to see any other clock input.
 						//
 						ports->segment( new DeviceRegister( (Notification *)crystal, Clock::CLKPR ), EXT_IO( 0x61 ));
+						crystal->add( AVR_CPU::System_Clock, (Tick *)processor );
 						crystal->add( AVR_CPU::WDT_Clock, (Tick *)processor, 128 );
 
 					//
@@ -427,6 +428,35 @@ int main( int argc, char* argv[]) {
 				}
 				break;
 			}
+			case 'm': {
+				//
+				//	Dump a number of bytes of data space.
+				//
+				dword	a;
+				int	c;
+				char	*at;
+
+				if(( at = strchr( dec, '@' )) == NULL ) {
+					printf( "Start address not supplied.\n" );
+					break;
+				}
+				*at++ = EOS;
+				if( !labels->evaluate( memory_address, at, &a )) {
+					printf( "Start address not recognised.\n" );
+					break;
+				}
+				if(( c = atoi( dec )) == 0 ) c = 1;
+				while( c-- ) {
+					if( simulate->examine( Memory_Address, a, labels, inst, BUFFER )) {
+						printf( "%s: %s\n", labels->expand( memory_address, a, adrs, BUFFER ), inst );
+						a += 1;
+					}
+					else {
+						printf( "%s: Undefined\n", labels->expand( memory_address, a, adrs, BUFFER ));
+					}
+				}
+				break;
+			}
 			case 'w': {
 				//
 				//	Write out the symbol table to a file.
@@ -599,12 +629,19 @@ int main( int argc, char* argv[]) {
 						//	Coverage data.
 						//
 						int sf[ LIST ], fc;
+						
 						switch( *dec++ ) {
+							case 'c': {
+								tracker->clear();
+								printf( "Coverage cleared.\n" );
+								break;
+							}
 							case 'm': {
 								fc = 0;
 								sf[ fc++ ] =  Read_Access;
 								sf[ fc++ ] =  Write_Access;
 								sf[ fc++ ] =  Stack_Access;
+								tracker->dump( stdout, sf, fc );
 								break;
 							}
 							case 'p': {
@@ -613,6 +650,7 @@ int main( int argc, char* argv[]) {
 								sf[ fc++ ] =  Jump_Access;
 								sf[ fc++ ] =  Call_Access;
 								sf[ fc++ ] =  Data_Access;
+								tracker->dump( stdout, sf, fc );
 								break;
 							}
 							case 'a':
@@ -625,10 +663,10 @@ int main( int argc, char* argv[]) {
 								sf[ fc++ ] =  Read_Access;
 								sf[ fc++ ] =  Write_Access;
 								sf[ fc++ ] =  Stack_Access;
+								tracker->dump( stdout, sf, fc );
 								break;
 							}
 						}
-						tracker->dump( stdout, sf, fc );
 						break;
 					}
 					default: {
@@ -640,6 +678,7 @@ int main( int argc, char* argv[]) {
 						printf( "tN\tTrace N instructions\n" );
 						printf( "dN\tDisassemble N instructions\n" );
 						printf( "dN@A\tas above but from address A\n" );
+						printf( "mN@A\tDump N bytes of data space at address A\n" );
 						printf( "wF\tSave symbols to file F\n" );
 						printf( "bA\tSet breakpoint at address A\n" );
 						printf( "xN\tDelete breakpoint number N\n" );

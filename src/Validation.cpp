@@ -67,5 +67,15 @@ static class ValidationReporter : public Reporter {
 Reporter *validation_reports = &( default_validation );
 
 //
+//	Code to support code debugging.
+//
+#ifdef ENABLE_PAUSE
+void pause_here( const char *file, int line ) {
+	fprintf( stderr, "Pause in '%s' at line %d\n", file, line );
+}
+#endif
+
+
+//
 //	EOF
 //

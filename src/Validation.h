@@ -25,6 +25,31 @@ extern Reporter *validation_reports;
 #define ASSERT(v)	do{if(!(v))(void)validation_reports->report(Validation_Level,Validation_Module,0,Assertion_Failure,"Assert: file '%s', line %d",__FILE__,__LINE__);}while(0)
 #define VALIDATION(p)	do{validation_reports=(p);}while(0)
 
+//
+//	Debugging primitive
+//
+//	Place the PAUSE( expr ) line in code
+//	and set a breakpoint on pause_here()
+//	routine.  The let the program run, and the
+//	break will be tripped when the expression
+//	evaluates true.
+//
+
+#ifdef ENABLE_PAUSE
+//
+//	If enabled...
+//
+extern void 		pause_here( const char *file, int line );
+#define PAUSE(v)	do{if((v))pause_here(__FILE__,__LINE__);}while(false)
+
+#else
+//
+//	If NOT enabled...
+//
+#define PAUSE(v)
+
+#endif
+
 #endif
 
 //
