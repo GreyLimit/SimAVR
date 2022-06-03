@@ -61,7 +61,6 @@ typedef struct {
 } LevelName;
 
 static LevelName levels[] = {
-	{ Ignore_level,		"Ignore"	},
 	{ Debug_Level,		"Debug"		},
 	{ Information_Level,	"Information"	},
 	{ Warning_Level,	"Warning"	},
@@ -136,6 +135,9 @@ static ExceptionName exceptions[] = {
 	
 	{ Hardware_Break,		"CPU BREAK"		},
 	{ Hardware_Sleep,		"CPU SLEEP"		},
+	{ Watchdog_Reset,		"CPU WDT Reset"		},
+	{ Skip_Instruction,		"CPU Skip instruction"	},
+	{ Accept_Interrupt,		"CPU Accept Interrupt"	},
 	
 	{ Unexplained_Error,		"Unexplained error"	}
 };

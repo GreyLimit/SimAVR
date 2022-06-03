@@ -73,7 +73,7 @@ class Pin {
 			return( _output );
 		}
 		void set_DDR( bool output ) {
-			if( output != _output ) _report->report( Error_Level, Pin_Module, _number, Config_Change, "Change direction to %s", ( output? "OUT": "IN" ));
+			if( output != _output ) _report->report( Information_Level, Pin_Module, _number, Config_Change, "Change direction to %s", ( output? "OUT": "IN" ));
 			_output = output;
 		}
 			
@@ -83,13 +83,13 @@ class Pin {
 		void set_PORT( bool value ) {
 			if( _output ) {
 				if( value != _value ) {
-					_report->report( Error_Level, Pin_Module, _number, Config_Change, "Change value to %d", ( value? 1: 0 ));
+					_report->report( Information_Level, Pin_Module, _number, Config_Change, "Change value to %d", ( value? 1: 0 ));
 					_value = value;
 					if( _update ) _update->pin_change( _number, _value );
 				}
 			}
 			else {
-				if( value != _pullup ) _report->report( Error_Level, Pin_Module, _number, Config_Change, "Change pullup %s", ( value? "ON": "OFF" ));
+				if( value != _pullup ) _report->report( Information_Level, Pin_Module, _number, Config_Change, "Change pullup %s", ( value? "ON": "OFF" ));
 				_pullup = value;
 			}
 		}
@@ -100,7 +100,7 @@ class Pin {
 		void set_PIN( bool value ) {
 			if( value ) {
 				_value != _value;
-				_report->report( Error_Level, Pin_Module, _number, Config_Change, "Toggle value to %d", ( _value? 1: 0 ));
+				_report->report( Information_Level, Pin_Module, _number, Config_Change, "Toggle value to %d", ( _value? 1: 0 ));
 				if( _update ) _update->pin_change( _number, _value );
 			}
 		}

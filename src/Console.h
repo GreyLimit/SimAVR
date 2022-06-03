@@ -182,18 +182,28 @@ class Console : public Reporter {
 		virtual bool report( Level lvl, Modules from, int instance, Exception number ) {
 			char buffer[ max_buffer ];
 
+			if( lvl == Information_Level ) {
+				fprintf( _output, "[%s]\n", description( lvl, from, instance, number, buffer, max_buffer ));
+				return( false );
+			}
 			if( ignore_exception( lvl, from, instance, number )) return( false );
 			fprintf( _output, "[%s]\n", description( lvl, from, instance, number, buffer, max_buffer ));
 			return( choose_action( lvl, from, instance, number ));
 		}
 		
 		virtual bool report( Level lvl, Modules from, int instance, Exception number, const char *fmt, ... ) {
-			
-			if( ignore_exception( lvl, from, instance, number )) return( false );
-
 			char		buffer[ max_buffer ];
 			va_list		args;
 			
+			
+			if( lvl == Information_Level ) {
+				va_start( args, fmt );
+				fprintf( _output, "[%s] ", description( lvl, from, instance, number, buffer, max_buffer ));
+				vfprintf( _output, fmt, args );
+				fprintf( _output, "\n" );
+				return( false );
+			}
+			if( ignore_exception( lvl, from, instance, number )) return( false );
 			va_start( args, fmt );
 			fprintf( _output, "[%s] ", description( lvl, from, instance, number, buffer, max_buffer ));
 			vfprintf( _output, fmt, args );

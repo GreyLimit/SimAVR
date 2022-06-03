@@ -179,6 +179,10 @@ memory_address UBRR0L	$C4
 memory_address UBRR0H	$C5
 memory_address UDR0	$C6
 #
+#	Static memory starts here
+#
+memory_address SRAM	$0100
+#
 #	Application starts here?
 #
 program_address APP 92

@@ -45,8 +45,7 @@ typedef enum {
 //	Define the various levels which reports which can be submitted under.
 //
 typedef enum {
-	Ignore_level		= 0,
-	Debug_Level,
+	Debug_Level		= 0,
 	Information_Level,
 	Warning_Level,
 	Error_Level,
@@ -119,6 +118,9 @@ typedef enum {
 	Reserved_Instruction,		// Instruction set aside for future use
 	Hardware_Break,			// AVR executes debugging break point
 	Hardware_Sleep,			// AVR MCU enters sleep mode
+	Watchdog_Reset,			// AVR MCU watchdog timer has been reset
+	Skip_Instruction,		// AVR MCU Skipping this instruction
+	Accept_Interrupt,		// AVR MCU Accepts Interrupt
 
 	//
 	//	Catch all exception

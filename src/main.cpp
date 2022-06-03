@@ -100,7 +100,7 @@ static CPU *atmega328p( Reporter *channel, Coverage *tracker, const char *load, 
 						//
 						//	Add in bits of IO
 						//
-						//portb->attach( new Pin( channel, 0 ), 0 );
+						portb->attach( pin[ 14 ], 0 );
 						portb->attach( pin[ 15 ], 1 );
 						portb->attach( pin[ 16 ], 2 );
 						portb->attach( pin[ 17 ], 3 );
@@ -111,6 +111,38 @@ static CPU *atmega328p( Reporter *channel, Coverage *tracker, const char *load, 
 						ports->segment( new DeviceRegister( portb, Port::PORTn ), 0x05 );
 						ports->segment( new DeviceRegister( portb, Port::DDRn ), 0x04 );
 						ports->segment( new DeviceRegister( portb, Port::PINn ), 0x03 );
+
+	Port		*portc		= new Port( channel, 2 );
+						//
+						//	Add in bits of IO
+						//
+						portc->attach( pin[ 23 ], 0 );
+						portc->attach( pin[ 24 ], 1 );
+						portc->attach( pin[ 25 ], 2 );
+						portc->attach( pin[ 26 ], 3 );
+						portc->attach( pin[ 27 ], 4 );
+						portc->attach( pin[ 28 ], 5 );
+						portc->attach( pin[ 1 ], 6 );
+						portc->attach( new Pin( channel, 0 ), 7 );
+						ports->segment( new DeviceRegister( portc, Port::PORTn ), 0x08 );
+						ports->segment( new DeviceRegister( portc, Port::DDRn ), 0x07 );
+						ports->segment( new DeviceRegister( portc, Port::PINn ), 0x06 );
+
+	Port		*portd		= new Port( channel, 3 );
+						//
+						//	Add in bits of IO
+						//
+						portd->attach( pin[ 2 ], 0 );
+						portd->attach( pin[ 3 ], 1 );
+						portd->attach( pin[ 4 ], 2 );
+						portd->attach( pin[ 5 ], 3 );
+						portd->attach( pin[ 6 ], 4 );
+						portd->attach( pin[ 11 ], 5 );
+						portd->attach( pin[ 12 ], 6 );
+						portd->attach( pin[ 13 ], 7 );
+						ports->segment( new DeviceRegister( portd, Port::PORTn ), 0x0B );
+						ports->segment( new DeviceRegister( portd, Port::DDRn ), 0x0A );
+						ports->segment( new DeviceRegister( portd, Port::PINn ), 0x09 );
 
 					//
 					//	Build the ADC system
@@ -695,6 +727,25 @@ int main( int argc, char* argv[]) {
 						printf( "?cm\tDisplay memory coverage data\n" );
 						printf( "\n\tN and A have the form '({symbol}[+-])?{number}'\n" );
 						printf( "\twhere number is '$' hex, '%%' bin or decimal.\n" );
+						break;
+					}
+				}
+				break;
+			}
+			case '!': {
+				switch( *dec ) {
+					case 'r': {
+						//
+						//	Reset MCU.
+						//
+						simulate->reset();
+						crystal->reset();
+						tracker->clear();
+						printf( "MCU reset.\n" );
+						break;
+					}
+					default: {
+						printf( "Eh '!%c'?\n", *dec );
 						break;
 					}
 				}

@@ -29,6 +29,7 @@ class Map : public Memory {
 			word		starts,
 					ends;
 			Memory		*handler;
+			int		weight;
 			component	*before,
 					*after;
 		};
@@ -51,7 +52,7 @@ class Map : public Memory {
 		word		_size;
 
 		//
-		//	Find the target segment...
+		//	Find the target segment.
 		//
 		component *find( word adrs ) {
 			component *ptr = _segments;
@@ -70,6 +71,82 @@ class Map : public Memory {
 				}
 			}
 			return( NULL );
+		}
+
+		//
+		//	Serialise a tree into increasing order.
+		//
+		component *serialise( component *ptr, component *tail ) {
+			component *p;
+
+			if( ptr == NULL ) return( tail );
+			p = ptr->before;
+			ptr->before = NULL;
+			if(( ptr->after = serialise( ptr->after, tail )) != NULL ) {
+				ptr->weight = ptr->after->weight + 1;
+			}
+			else {
+				ptr->weight = 1;
+			}
+			return( serialise( p, ptr ));
+		}
+		//
+		//	Rebuild a tree from a serialised list of nodes.
+		//
+		component *build( component *p, int offset ) {
+			int		h;
+			component	*b, *r, **t;
+
+			//
+			//	Simple case first.
+			//
+			if( p == NULL ) return( NULL );
+
+			//
+			//	Where is the half way point?
+			//
+			h = ( p->weight - offset ) / 2;
+
+			//
+			//	Roll off h record to the before pointer b.
+			//
+			t = &b;
+			while( h-- ) {
+
+				ASSERT( p != NULL );
+				ASSERT( p->before == NULL );
+				
+				*t = p;
+				t = &( p->after );
+				p = p->after;
+			}
+			*t = NULL;
+
+			//
+			//	p is now the new root node.
+			//
+			ASSERT( p != NULL );
+			r = p;
+			p = p->after;
+
+			//
+			//	Rebuild root node.
+			//
+			r->before = build( b, r->weight );
+			r->after = build( p, offset );
+			r->weight = 1 + (( r->before != NULL )? r->before->weight: 0 ) + (( r->after != NULL )? r->after->weight: 0 );
+
+			//
+			//	Done!
+			//
+			return( r );
+		}
+		
+		//
+		//	Balance a tree.
+		//
+		component *balance( component *ptr ) {
+			return( build( serialise( ptr, NULL ), 0 ));
 		}
 
 	public:
@@ -129,18 +206,14 @@ class Map : public Memory {
 			p->starts = adrs;
 			p->ends = t;
 			p->handler = block;
+			p->weight = 1;
 			p->before = NULL;
 			p->after = NULL;
 			*a = p;
 			//
-			//	For performance reasons the tree should be
-			//	re-balanced at this point, but perhaps this
-			//	isn't the best approach.  There is a good
-			//	argument for *dynamically* restructuring the
-			//	tree in the style of an LRU cache and so
-			//	optimising access times over time.
+			//	re-balance tree (re evaluates weights)
 			//
-			//	anyway ...
+			_segments = balance( _segments ); 
 			//
 			//	And confirm success.
 			//

@@ -62,7 +62,7 @@ class Port : public Notification {
 			ASSERT( pin != NULL );
 			ASSERT( bit < port_pins );
 			ASSERT( _pin[ bit ] == NULL );
-			_report->report( Ignore_level, Port_Module, _instance, Config_Change, "Port %c, new pin at bit %d", name( _instance ), (int)bit );
+			_report->report( Information_Level, Port_Module, _instance, Config_Change, "Port %c, new pin at bit %d", name( _instance ), (int)bit );
 			_pin[ bit ] = pin;
 		}
 		

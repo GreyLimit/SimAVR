@@ -138,10 +138,10 @@ class Clock : public Notification {
 		//
 		//	Add a new target to the clock.
 		//
-		virtual bool add( word id, Tick *dev ) {
+		bool add( word id, Tick *dev ) {
 			return( add( id, dev, _khz ));
 		}
-		virtual bool add( word id, Tick *dev, word khz ) {
+		bool add( word id, Tick *dev, word khz ) {
 			ticking	*p;
 			
 			//
@@ -168,7 +168,7 @@ class Clock : public Notification {
 		//	should emit 'inst_end' as true one
 		//	the last tick.
 		//
-		virtual void tick( word count, bool has_end ) {
+		void tick( word count, bool has_end ) {
 			//
 			//	Loop through the number of ticks we should be
 			//	simulating. 
@@ -187,7 +187,7 @@ class Clock : public Notification {
 		//
 		//	Convert ms to clock ticks.
 		//
-		virtual word millis( word duration ) {
+		word millis( word duration ) {
 			ASSERT( duration <= _max );
 			return( duration * _khz );
 		}
@@ -195,15 +195,22 @@ class Clock : public Notification {
 		//
 		//	Convert us to clock ticks.
 		//
-		virtual word micros( word duration ) {
+		word micros( word duration ) {
 			return( mul_div<word>( duration, _khz, 1000 ));
 		}
 
 		//
 		//	Return how many ticks we have handled.
 		//
-		virtual dword count( void ) {
+		dword count( void ) {
 			return( _count );
+		}
+
+		//
+		//	Reset the counter.
+		//
+		void reset( void ) {
+			_count = 0;
 		}
 
 		//

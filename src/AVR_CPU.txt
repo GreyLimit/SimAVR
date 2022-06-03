@@ -965,7 +965,7 @@ class AVR_CPU : public CPU, Notification, Tick {
 		word get_ry( void );
 		word get_rz( void );
 {BS}
-		word AVR_CPU::get_word_reg( word r ) { return( combinew( _reg[ r+1 ], _reg[ r ])); }
+		word AVR_CPU::get_word_reg( word r ) { return( combine( _reg[ r+1 ], _reg[ r ])); }
 		word AVR_CPU::get_rw( void ) { return( get_word_reg( W_register )); }
 		word AVR_CPU::get_rx( void ) { return( get_word_reg( X_register )); }
 		word AVR_CPU::get_ry( void ) { return( get_word_reg( Y_register )); }
@@ -1174,6 +1174,7 @@ class AVR_CPU : public CPU, Notification, Tick {
 			//
 			//	Resets the timer associated with the watch dog resetting the MCU.
 			//
+			_reporter->report( Information_Level, CPU_Module, _instance, Watchdog_Reset, "WDT Reset from %d to %d", (int)_wdt_remaining, (int)_wdt_reset );
 			_wdt_remaining = _wdt_reset;
 		}
 
@@ -1285,6 +1286,7 @@ class AVR_CPU : public CPU, Notification, Tick {
 			//			action in the instruction handling code.
 			//
 			if( _skip_next ) {
+				_reporter->report( Information_Level, CPU_Module, _instance, Skip_Instruction, "PC = $%06X", (int)_pc );
 				_skip_next = false;
 				inst = find_instruction( _program->read( _pc ) );
 				isize = inst->size();
@@ -1316,6 +1318,7 @@ class AVR_CPU : public CPU, Notification, Tick {
 				//	Look for a pending interrupt..
 				//
 				if( _irqs->find( &irq )) {
+					_reporter->report( Information_Level, CPU_Module, _instance, Accept_Interrupt, "IRQ = %d", (int)irq );
 					//
 					//	We have an interrupt pending, so we need
 					//	to do a couple of things:
@@ -1474,11 +1477,20 @@ class AVR_CPU : public CPU, Notification, Tick {
 					snprintf( buffer, max, "IRQVec=%04X", _irq_vector );
 					return( true );
 				}
+				case 44: {
+					if( _wdt_enabled ) {
+						snprintf( buffer, max, "WDT=%ld", (long int)_wdt_remaining );
+					}
+					else {
+						snprintf( buffer, max, "WDT=disabled" );
+					}
+					return( true );
+				}
 				default: {
 					break;
 				}
 			}
-			if(( f = reg - 44 ) >= 4 ) return( false );
+			if(( f = reg - 45 ) >= 4 ) return( false );
 			snprintf( buffer, max, "fuse[%d]=%02X", f, _fuses->read( f ));
 			return( true );
 		}
@@ -5374,7 +5386,7 @@ public:
 		char	rs[ symbol_buffer ],
 			is[ symbol_buffer ];
 
-		snprintf( buffer, max, "sbiw %s,%s",	labels->expand( word_constant, arg_d24d25_d30d31( opcode ), rs, symbol_buffer ),
+		snprintf( buffer, max, "sbiw %s,%s",	labels->expand( word_register, arg_d24d25_d30d31( opcode ), rs, symbol_buffer ),
 							labels->expand( word_constant, arg_imm6_w( opcode ), is, symbol_buffer ));
 		return( 1 );
 	}
