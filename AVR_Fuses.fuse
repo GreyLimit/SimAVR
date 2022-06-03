@@ -1,5 +1,0 @@
-#
-#	Provide the basic Arduino Fuse setting.
-#
-BOOTSZ	3
-BOOTRST	0
