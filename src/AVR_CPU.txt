@@ -1606,7 +1606,10 @@ class AVR_CPU : public CPU, Notification, Tick {
 					//
 					//	Flag can always be cleared.
 					//
-					if( value & wdtcsr_WDIF ) _wdtcsr &= ~wdtcsr_WDIF;
+					if( value & wdtcsr_WDIF ) {
+						_wdtcsr &= ~wdtcsr_WDIF;
+						value &= ~wdtcsr_WDIF;
+					}
 					//
 					//	Others require the Change Enable bit to be set.
 					//
@@ -1614,9 +1617,13 @@ class AVR_CPU : public CPU, Notification, Tick {
 						byte	ps;
 						
 						//
-						//	We can make a change
+						//	We can make a change to the watch dog configuration
 						//
-						_wdtcsr |= value & ~( wdtcsr_WDCE | wdtcsr_WDIF );
+						_wdtcsr = value & ~wdtcsr_WDCE;
+						//
+						//	Evaluate the pre-scaler being requested, any value
+						//	of 10 or above is reserved and will do nothing.
+						//
 						ps = (( value >> 2 ) & 0x80 )|( value & 0x07 );
 						if( ps < 10 ) _wdt_reset = 2048 << ps;
 						//
@@ -1635,6 +1642,7 @@ class AVR_CPU : public CPU, Notification, Tick {
 							//	We have set this bit, so we start the
 							//	time window in which to update the register
 							//
+							_reporter->report( Information_Level, CPU_Module, _instance, Config_Change, "WDT change enabled" );
 							_wdtcsr |= wdtcsr_WDCE;
 							_wdt_window = 4;
 						}
@@ -1642,6 +1650,10 @@ class AVR_CPU : public CPU, Notification, Tick {
 					break;
 				}
 				default: {
+					//
+					//	This is the "memory mapped" access into the
+					//	register file.
+					//
 					ASSERT( id < GPRegisters );
 					_reg[ id ] = value;
 					break;
@@ -1740,6 +1752,10 @@ class AVR_CPU : public CPU, Notification, Tick {
 					//	The 128 KHz clock ticking.
 					//
 					if( _wdt_enabled ) {
+						//
+						//	Watch dog timer counting down ...
+						//
+						_reporter->report( Information_Level, CPU_Module, _instance, Watchdog_tick );
 						if( --_wdt_remaining == 0 ) {
 							//
 							//	Raise watch dog interrupt.

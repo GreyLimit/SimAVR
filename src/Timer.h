@@ -125,7 +125,7 @@ class Timer : public Tick, Notification {
 		};
 
 		//
-		//	The table of 8-bit waveforms
+		//	The table of possible waveforms
 		//
 		static const int waveform_modes = 24;
 		static WaveForm _waveform[ waveform_modes ];
@@ -185,6 +185,7 @@ class Timer : public Tick, Notification {
 		inline byte high_byte( word value ) { return( value >> 8 ); }
 		inline byte low_byte( word value ) { return( value ); }
 		inline word high_low( byte hi, byte lo ) { return(( (word)hi << 8 )||((word)lo )); }
+
 
 	public:
 		//
@@ -269,7 +270,7 @@ class Timer : public Tick, Notification {
 
 
 //
-//	This is the generalised Timer Device.
+//	This is the generalised Timer Device for both 8 and 16 bit devices (so far).
 //
 //	instance	The hardware device number.
 //	bits		The size of the counter in bits.
@@ -278,7 +279,7 @@ class Timer : public Tick, Notification {
 //	ovrf
 //	xxxx
 //
-template< int instance, bool eight_bit, byte compa, byte compb, byte ovrf, byte xxxx > class TimerDevice : public Timer {
+template< int instance, bool eight_bit, byte compa, byte compb, byte ovrf, byte capt > class TimerDevice : public Timer {
 	private:
 		//
 		//	The timer internal registers
@@ -286,17 +287,21 @@ template< int instance, bool eight_bit, byte compa, byte compb, byte ovrf, byte 
 		word		_tcnt,
 				_ocra,	_pending_ocra,
 				_ocrb,	_pending_ocrb,
-				_icr,
-				_temp;
+				_icr;
+				
+		word		*_loop_on;		// points to where the upper loop value
+							// is stored.
 				
 		byte		_tifr,
 				_timsk,
 				_tccra,
 				_tccrb,
-				_tccrc;
+				_tccrc,
+				_temp;
 
 		word		_counter;		// The pre-scaling counter.
-		bool		_skip_match;
+		bool		_skip_match,
+				_countdown;
 		
 		//
 		//	Define elements of the configuration as extracted from
@@ -307,6 +312,37 @@ template< int instance, bool eight_bit, byte compa, byte compb, byte ovrf, byte 
 		WaveForm	*_waveform;
 		ClockMode	*_clock;
 		 
+		//
+		//	Is it time to apply an action?
+		//
+		bool do_action( ActionAt when, word target ) {
+			switch( when ) {
+				case At_Max:	return( _tcnt == _waveform->maximum );
+				case At_Top:	return( _tcnt == target );
+				case At_Bottom:	return( _tcnt == 0 );
+				case At_Imm:	return( true );
+				case At_Never:	return( false );
+				default: break;
+			}
+			ABORT();
+			return( false );
+		}
+
+		//
+		//	Return the address of where the loop target is stored.
+		//
+		word *locate_loop_on( void ) {
+			ASSERT( _waveform != NULL );
+			
+			switch( _waveform->loop_on ) {
+				case On_OCRA: return( &_ocra );
+				case On_ICR: return( &_icr );
+				default: break;
+			}
+			return( &( _waveform->maximum ));
+		}
+
+
 	public:
 		//
 		//	Build a new timer device!
@@ -326,10 +362,12 @@ template< int instance, bool eight_bit, byte compa, byte compb, byte ovrf, byte 
 			_pin_op_a = select_pin_mode( 0 );
 			_pin_op_b = select_pin_mode( 0 );
 			_waveform = select_waveform( eight_bit, 0 );
+			_loop_on = locate_loop_on();
 			_clock = select_clock( 0 );
 
 			_counter = 0;
 			_skip_match = false;
+			_countdown = false;
 		}
 
 		//
@@ -352,13 +390,69 @@ template< int instance, bool eight_bit, byte compa, byte compb, byte ovrf, byte 
 					if(( _counter += 1 ) >= _clock->prescaler ) {
 						_counter = 0;
 						//
-						//	Pre-Scaler counter has rolled, so we take this
-						//	as a genuine "tick" for the timer counter.
+						//	Increment/decrement the pre-scaled counter.
 						//
-						if(( _tcnt += 1 ) == 0 ) {
+						if( _waveform->up_down ) {
 							//
-							//	Initiate over flow?
+							//	Doing a saw-tooth counter..
 							//
+							if( _countdown ) {
+								if( _tcnt > 0 ) {
+									_tcnt -= 1;
+								}
+								else {
+									_countdown = false;
+									_tcnt += 1;
+								}
+							}
+							else {
+								if( _tcnt < *_loop_on ) {
+									_tcnt += 1;
+								}
+								else {
+									_countdown = true;
+									_tcnt -= 1;
+								}
+							}
+						}
+						else {
+							//
+							//	Doing a triangle counter
+							//
+							if( _tcnt < *_loop_on ) {
+								_tcnt += 1;
+							}
+							else {
+								_countdown = false;
+								_tcnt = 0;
+							}
+						}
+						//
+						//	Now we check for various conditions and
+						//	implement the appropriate action in the
+						//	event of a suitable match.
+						//
+						if( do_action( _waveform->set_ocr, _ocra )) {
+							if( _ocra != _pending_ocra ) {
+								_report->report( Information_Level, Timer_Module, instance, Config_Change, "OCR%dA = %d (from %d )", instance, (int)_pending_ocra, (int)_ocra );
+								_ocra = _pending_ocra;
+							}
+							if( _ocrb != _pending_ocrb ) {
+								_report->report( Information_Level, Timer_Module, instance, Config_Change, "OCR%dA = %d (from %d )", instance, (int)_pending_ocra, (int)_ocra );
+								_ocrb = _pending_ocrb;
+							}
+						}
+						if( do_action( _waveform->set_tov, _ocra )) {
+							_tifr |= bit_TOVn;
+							if( _timsk & bit_TOIEn ) _interrupt->raise( ovrf, &_tifr, bit_TOVn );
+						}
+						if(( _timsk & bit_OCIEnA )&&( _tcnt == _ocra )) {
+							_tifr |= bit_OCFnA;
+							_interrupt->raise( compa, &_tifr, bit_OCFnA );
+						}
+						if(( _timsk & bit_OCIEnB )&&( _tcnt == _ocrb )) {
+							_tifr |= bit_OCFnB;
+							_interrupt->raise( compb, &_tifr, bit_OCFnB );
 						}
 					}
 				}
@@ -373,27 +467,39 @@ template< int instance, bool eight_bit, byte compa, byte compb, byte ovrf, byte 
 		virtual byte read_register( word id ) {
 			switch( id ) {
 				case OCRnBH: {
-					return( high_byte( _ocrb ));
+					ASSERT( !eight_bit );
+					
+					return( _temp );
 				}	
 				case OCRnBL: {
+					_temp = high_byte( _ocrb );
 					return( low_byte( _ocrb ));
 				}	
 				case OCRnAH: {
-					return( high_byte( _ocra ));
+					ASSERT( !eight_bit );
+					
+					return( _temp );
 				}
 				case OCRnAL: {
+					_temp = high_byte( _ocra );
 					return( low_byte( _ocra ));
 				}
 				case TCNTnH: {
-					return( high_byte( _tcnt ));
+					ASSERT( !eight_bit );
+					
+					return( _temp );
 				}
 				case TCNTnL: {
+					_temp = high_byte( _tcnt );
 					return( low_byte( _tcnt ));
 				}
 				case ICRnH: {
-					return( high_byte( _icr ));
+					ASSERT( !eight_bit );
+					
+					return( _temp );
 				}
 				case ICRnL: {
+					_temp = high_byte( _icr );
 					return( low_byte( _icr ));
 				}
 				case TCCRnC: {
@@ -421,12 +527,14 @@ template< int instance, bool eight_bit, byte compa, byte compb, byte ovrf, byte 
 		virtual void write_register( word id, byte value )  {
 			switch( id ) {
 				case OCRnBH: {
-					_temp = (word)value << 8;
+					ASSERT( !eight_bit );
+					
+					_temp = value;
 					_report->report( Information_Level, Timer_Module, instance, Config_Change, "Timer %d Temp MSB = %d", instance, (int)value );
 					break;
 				}
 				case OCRnBL: {
-					word whole = _temp | value;
+					word whole = high_low( _temp, value );
 					
 					if( whole != _pending_ocrb ) {
 						_pending_ocrb = whole;
@@ -441,12 +549,14 @@ template< int instance, bool eight_bit, byte compa, byte compb, byte ovrf, byte 
 					break;
 				}	
 				case OCRnAH: {
-					_temp = (word)value << 8;
+					ASSERT( !eight_bit );
+					
+					_temp = value;
 					_report->report( Information_Level, Timer_Module, instance, Config_Change, "Timer %d Temp MSB = %d", instance, (int)value );
 					break;
 				}
 				case OCRnAL: {
-					word whole = _temp | value;
+					word whole = high_low( _temp, value );
 					
 					if( whole != _pending_ocra ) {
 						_pending_ocra = whole;
@@ -461,23 +571,27 @@ template< int instance, bool eight_bit, byte compa, byte compb, byte ovrf, byte 
 					break;
 				}
 				case TCNTnH: {
-					_temp = (word)value << 8;
+					ASSERT( !eight_bit );
+					
+					_temp = value;
 					_report->report( Information_Level, Timer_Module, instance, Config_Change, "Timer %d Temp MSB = %d", instance, (int)value );
 					break;
 				}
 				case TCNTnL: {
-					_tcnt = _temp | value;
+					_tcnt = high_low( _temp, value );
 					_skip_match = true;
 					_report->report( Information_Level, Timer_Module, instance, Config_Change, "TCNT%d = %d", instance, (int)_tcnt );
 					break;
 				}
 				case ICRnH: {
-					_temp = (word)value << 8;
+					ASSERT( !eight_bit );
+					
+					_temp = value;
 					_report->report( Information_Level, Timer_Module, instance, Config_Change, "Timer %d Temp MSB = %d", instance, (int)value );
 					break;
 				}
 				case ICRnL: {
-					_icr = _temp | value;
+					_icr = high_low( _temp, value );
 					_report->report( Information_Level, Timer_Module, instance, Config_Change, "ICR%d = %d", instance, (int)_icr );
 					break;
 				}
@@ -527,6 +641,7 @@ template< int instance, bool eight_bit, byte compa, byte compb, byte ovrf, byte 
 					//	0 on 8 bit timers.
 					//
 					_waveform = select_waveform( eight_bit, (( _tccrb >> 1 ) & 0x0C )|( _tccra & 0x03 ));
+					_loop_on = locate_loop_on();
 					_report->report( Information_Level, Timer_Module, instance, Config_Change, _waveform->desc, instance );
 					//
 					//	(CS) Clock select
@@ -559,6 +674,7 @@ template< int instance, bool eight_bit, byte compa, byte compb, byte ovrf, byte 
 					//	0 on 8 bit timers.
 					//
 					_waveform = select_waveform( eight_bit, (( _tccrb >> 1 ) & 0x0C )|( _tccra & 0x03 ));
+					_loop_on = locate_loop_on();
 					_report->report( Information_Level, Timer_Module, instance, Config_Change, _waveform->desc, instance );
 					break;
 				}

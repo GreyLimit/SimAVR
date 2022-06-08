@@ -108,7 +108,7 @@ static ExceptionName exceptions[] = {
 	
 	{ Not_Supported,		"Not supported"		},
 	{ Invalid_Identifier,		"Identifier invalid"	},
-	{ Invalid_Number,		"Number format invalid"	},
+	{ Invalid_Number,		"Number invalid"	},
 	{ Overlap_Error,		"Objects Overlap"	},
 	{ Too_Fast,			"Sub clock too quick"	},
 	
@@ -129,15 +129,16 @@ static ExceptionName exceptions[] = {
 	{ Parameter_Invalid,		"Parameter invalid"	},
 	{ Feature_Disabled,		"Feature disabled"	},
 	{ Feature_Reserved,		"Feature reserved"	},
-	{ Illegal_Instruction,		"Illegal instruction"	},
-	{ Unsupported_Instruction,	"Unsupported instruction"	},
-	{ Reserved_Instruction,		"Reserved instruction"	},
+	{ Illegal_Instruction,		"Illegal inst"		},
+	{ Unsupported_Instruction,	"Unsupported inst"	},
+	{ Reserved_Instruction,		"Reserved inst"		},
 	
 	{ Hardware_Break,		"CPU BREAK"		},
 	{ Hardware_Sleep,		"CPU SLEEP"		},
 	{ Watchdog_Reset,		"CPU WDT Reset"		},
-	{ Skip_Instruction,		"CPU Skip instruction"	},
-	{ Accept_Interrupt,		"CPU Accept Interrupt"	},
+	{ Watchdog_tick,		"CPU WDT tick"		},
+	{ Skip_Instruction,		"CPU Skip inst"		},
+	{ Accept_Interrupt,		"CPU Accept IRQ"	},
 	
 	{ Unexplained_Error,		"Unexplained error"	}
 };

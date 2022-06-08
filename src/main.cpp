@@ -347,12 +347,13 @@ int main( int argc, char* argv[]) {
 	while( true ) {
 		char	adrs[ BUFFER ],
 			inst[ BUFFER ],
+			time[ BUFFER ],
 			*dec;
 		
 		dword	pc	= simulate->next_instruction();
 		word	len	= simulate->disassemble( pc, labels, inst, BUFFER );
 
-		printf( "%8lu %s: %s\n", (unsigned long int)crystal->count(), labels->expand( program_address, pc, adrs, BUFFER ), inst );
+		printf( "%s %s: %s\n", crystal->count_text( time, BUFFER ), labels->expand( program_address, pc, adrs, BUFFER ), inst );
 		printf( "> " );
 		fflush( stdout );
 		
@@ -430,7 +431,7 @@ int main( int argc, char* argv[]) {
 					}
 					pc = simulate->next_instruction();
 					len = simulate->disassemble( pc, labels, inst, BUFFER );
-					printf( "%8lu %s: %s\n", (unsigned long int)crystal->count(), labels->expand( program_address, pc, adrs, BUFFER ), inst );
+					printf( "%s %s: %s\n", crystal->count_text( time, BUFFER ), labels->expand( program_address, pc, adrs, BUFFER ), inst );
 				}
 				break;
 			}
@@ -481,11 +482,11 @@ int main( int argc, char* argv[]) {
 				while( c-- ) {
 					if( simulate->examine( Memory_Address, a, labels, inst, BUFFER )) {
 						printf( "%s: %s\n", labels->expand( memory_address, a, adrs, BUFFER ), inst );
-						a += 1;
 					}
 					else {
 						printf( "%s: Undefined\n", labels->expand( memory_address, a, adrs, BUFFER ));
 					}
+					a += 1;
 				}
 				break;
 			}

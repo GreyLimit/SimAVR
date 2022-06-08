@@ -26,7 +26,7 @@ program_address WDTVec			12
 program_address Timer2CompAVec		14
 program_address Timer2CompBVec		16
 program_address Timer2OverFlowVec	18
-program_address Timer1CaptureVec	20
+program_address Timer1CaptureVec		20
 program_address Timer1CompAVec		22
 program_address Timer1CompBVec		24
 program_address Timer1OverFlowVec	26

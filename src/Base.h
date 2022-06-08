@@ -39,6 +39,7 @@ static const char EOS = 0;
 static const char PLUS = '+';
 static const char MINUS = '-';
 static const char COMMA = ',';
+static const char ASTERIX = '*';
 
 //
 //	Provide some syntactic sugar to clarify coding.

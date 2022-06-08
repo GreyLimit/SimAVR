@@ -95,6 +95,13 @@ class Clock : public Notification {
 				_max;
 
 		//
+		//	pre-calculate the "human" time display
+		//	cur offs between ticks, usecs and msecs.
+		//
+		dword		_tick_limit,
+				_us_limit;
+
+		//
 		//	Keep track of ticks as they go by.
 		//
 		//	This is a limited mechanism.  If this is supposed
@@ -133,6 +140,11 @@ class Clock : public Notification {
 			//
 			_khz = khz;
 			_max = 0xFFFF / _khz;
+			//
+			//	Calculate the human cutoff limits.
+			//
+			_tick_limit = khz * 5;
+			_us_limit = khz * 250;
 		}
 
 		//
@@ -204,6 +216,30 @@ class Clock : public Notification {
 		//
 		dword count( void ) {
 			return( _count );
+		}
+
+		//
+		//	Return how much time has passed in ms or us.
+		//
+		dword count_ms( void ) {
+			return( _count / _khz );
+		}
+		dword count_us( void ) {
+			return( mul_div<dword>( _count, 1000, _khz ));
+		}
+		char *count_text( char *buf, int len ) {
+			if( _count < _tick_limit ) {
+				snprintf( buf, len, "%ld", (long int)_count );
+			}
+			else {
+				if( _count < _us_limit ) {
+					snprintf( buf, len, "%ldus", (long int)count_us());
+				}
+				else {
+					snprintf( buf, len, "%ldms", (long int)count_ms());
+				}
+			}
+			return( buf );
 		}
 
 		//

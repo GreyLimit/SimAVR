@@ -48,9 +48,19 @@ class Console : public Reporter {
 		static const int max_buffer = 100;
 
 		//
-		//	Keep list of exceptions that are always ignored.
+		//	Define a set of responses which can be selected
+		//	from when a report is specifically identified.
 		//
-		struct ignore_item {
+		enum Response {
+			Do_Ask,		// Force system to ask the operator.
+			Do_Hide,	// Continue operation without displaying report.
+			Do_Display	// Continue operation after displaying the report.
+		};
+
+		//
+		//	Keep list of exceptions that are specifically managed.
+		//
+		struct identify_item {
 			//
 			//	What this record applies to.
 			//
@@ -59,60 +69,64 @@ class Console : public Reporter {
 			int		instance;
 			Exception	number;
 			//
-			//	Permanent?  If not how many left to ignore.
+			//	What is our action when this crops up again?
 			//
+			Response	action;
 			bool		permanent;
 			word		count;
 			//
-			ignore_item	*next;
+			identify_item	*next;
 		};
-		ignore_item	*_ignore_list;
+		identify_item	*_identify_list;
 		
 		//
-		//	Find the address of an ignore record, if there is one.
+		//	Find the address of an identify record, if there is one.
 		//
-		ignore_item *find_ignore( Level lvl, Modules from, int instance, Exception number ) {
-			for( ignore_item *p = _ignore_list; p != NULL; p = p->next ) {
+		identify_item *find_identify( Level lvl, Modules from, int instance, Exception number ) {
+			for( identify_item *p = _identify_list; p != NULL; p = p->next ) {
 				if(( lvl == p->lvl )&&( from == p->from )&&( instance == p->instance )&&( number == p->number )) return( p );
 			}
 			return( NULL );
 		}
 
 		//
-		//	Routines to add and test ignore tests.
+		//	Routines to add and test identify tests.
 		//
-		bool ignore_exception( Level lvl, Modules from, int instance, Exception number ) {
-			ignore_item *p = find_ignore( lvl, from, instance, number );
+		Response identify_exception( Level lvl, Modules from, int instance, Exception number ) {
+			identify_item *p = find_identify( lvl, from, instance, number );
 			
-			if( p == NULL ) return( false );
-			if( p->permanent ) return( true );
+			if( p == NULL ) return( Do_Ask );
+			if( p->permanent ) return( p->action );
 			if( p->count > 0 ) {
 				p->count -= 1;
-				return( true );
+				return( p->action );
 			}
-			return( false );
+			return( Do_Ask );
 		}
-		void set_ignore( Level lvl, Modules from, int instance, Exception number, word count ) {
-			ignore_item *p = find_ignore( lvl, from, instance, number );
+		void set_identify( Level lvl, Modules from, int instance, Exception number, bool forever, word count, Response action ) {
+			identify_item *p = find_identify( lvl, from, instance, number );
 			
 			if( p == NULL ) {
-				p = new ignore_item;
+				p = new identify_item;
 				p->lvl = lvl;
 				p->from = from;
 				p->instance = instance;
 				p->number = number;
-				p->next = _ignore_list;
-				_ignore_list = p;
+				p->next = _identify_list;
+				_identify_list = p;
 			}
-			p->permanent = ( count == 0 );
+			p->action = action;
+			p->permanent = forever;
 			p->count = count;
 		}
 		
 		//
 		//	Ask the console device how to continue as a result
-		//	of this error.
+		//	of this error.  Return false if no remedial action
+		//	is to be taken, true if the simulator should be
+		//	reacting to the report.
 		//
-		//	C	Return false for continue this once
+		//	C	Return false and continue this once
 		//
 		//	In	Return false for the next n times.  If n is
 		//		missing or 0 then always return false.
@@ -136,11 +150,12 @@ class Console : public Reporter {
 				switch( *dec++ ) {
 					case 'c':
 					case 'C': {
+						set_identify( lvl, from, instance, number, ( *dec == ASTERIX ), (word)atoi( dec ), Do_Display );
 						return( false );
 					}
 					case 'i':
 					case 'I': {
-						set_ignore( lvl, from, instance, number, (word)atoi( dec ));
+						set_identify( lvl, from, instance, number, ( *dec == ASTERIX ), (word)atoi( dec ), Do_Hide );
 						return( false );
 					}
 					case 'b':
@@ -176,38 +191,30 @@ class Console : public Reporter {
 			_output = stdout;
 			_input = stdin;
 			_tripped = false;
-			_ignore_list = NULL;
+			_identify_list = NULL;
 		}
 		
 		virtual bool report( Level lvl, Modules from, int instance, Exception number ) {
-			char buffer[ max_buffer ];
+			char		buffer[ max_buffer ];
+			Response	rep;
 
-			if( lvl == Information_Level ) {
-				fprintf( _output, "[%s]\n", description( lvl, from, instance, number, buffer, max_buffer ));
-				return( false );
-			}
-			if( ignore_exception( lvl, from, instance, number )) return( false );
+			if(( rep = identify_exception( lvl, from, instance, number )) == Do_Hide ) return( false );
 			fprintf( _output, "[%s]\n", description( lvl, from, instance, number, buffer, max_buffer ));
+			if( rep == Do_Display ) return( false );
 			return( choose_action( lvl, from, instance, number ));
 		}
 		
 		virtual bool report( Level lvl, Modules from, int instance, Exception number, const char *fmt, ... ) {
 			char		buffer[ max_buffer ];
 			va_list		args;
-			
-			
-			if( lvl == Information_Level ) {
-				va_start( args, fmt );
-				fprintf( _output, "[%s] ", description( lvl, from, instance, number, buffer, max_buffer ));
-				vfprintf( _output, fmt, args );
-				fprintf( _output, "\n" );
-				return( false );
-			}
-			if( ignore_exception( lvl, from, instance, number )) return( false );
+			Response	rep;
+
+			if(( rep = identify_exception( lvl, from, instance, number )) == Do_Hide ) return( false );
 			va_start( args, fmt );
 			fprintf( _output, "[%s] ", description( lvl, from, instance, number, buffer, max_buffer ));
 			vfprintf( _output, fmt, args );
 			fprintf( _output, "\n" );
+			if( rep == Do_Display ) return( false );
 			return( choose_action( lvl, from, instance, number ));
 		}
 		

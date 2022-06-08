@@ -119,6 +119,7 @@ typedef enum {
 	Hardware_Break,			// AVR executes debugging break point
 	Hardware_Sleep,			// AVR MCU enters sleep mode
 	Watchdog_Reset,			// AVR MCU watchdog timer has been reset
+	Watchdog_tick,			// AVR MCU watchdog clock tick...
 	Skip_Instruction,		// AVR MCU Skipping this instruction
 	Accept_Interrupt,		// AVR MCU Accepts Interrupt
 
