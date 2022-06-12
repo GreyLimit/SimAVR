@@ -36,10 +36,29 @@ typedef uint32_t	dword;
 //	Define come core constant values used across the program.
 //
 static const char EOS = 0;
+
+static const char TAB = '\t';
+static const char NL = '\n';
+static const char CR = '\r';
+static const char BS = '\b';
+static const char DEL = '\177';
+static const char ESCAPE = '\033';
+
+static const char SPACE = ' ';
 static const char PLUS = '+';
 static const char MINUS = '-';
 static const char COMMA = ',';
+static const char COLON = ':';
+static const char SEMICOLON = ';';
 static const char ASTERIX = '*';
+static const char QMARK = '?';
+
+static const char OBRACKET = '[';
+static const char CBRACKET = ']';
+static const char OPAREN = '(';
+static const char CPAREN = ')';
+static const char OBRACE = '{';
+static const char CBRACE = '}';
 
 //
 //	Provide some syntactic sugar to clarify coding.
@@ -89,6 +108,35 @@ template< class T > static inline T range( byte b ) {
 template< class T > static inline T extract( T v, T l, T m ) {
 	return(( v >> l ) & m );
 }
+
+//
+//	byte/word/dword conversions
+//
+#define HIGH_BYTE(w)	((byte)((w)>>8))
+inline byte high_byte( word w ) {
+	return( w >> 8 );
+}
+#define LOW_BYTE(w)	((byte)(w))
+inline byte low_byte( word w ) {
+	return( w );
+}
+#define COMBINE(h,l)	((word)(((h)<<8)|(l)))
+inline word combine( byte h, byte l ) {
+	return(( (word)h << 8 ) | (word)l );
+}
+#define HIGH_WORD(d)	((word)((d)>>16))
+inline word high_word( dword d ) {
+	return( d >> 16 );
+}
+#define LOW_WORD(d)	((word)(d))
+inline word low_word( dword d ) {
+	return( d );
+}
+#define COMBINEW(h,l)	((dword)(((h)<<16)|(l)))
+inline dword combinew( word h, word l ) {
+	return(( (dword)h << 16 ) |  (dword)l );
+}
+	
 
 //
 //	Define a huge number of binary constants to simplify the

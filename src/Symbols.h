@@ -29,10 +29,10 @@
 typedef enum  {
 	program_address,
 	memory_address,
+	data_address,
 	bit_constant,
 	byte_constant,
 	word_constant,
-	program_word,
 	byte_register,
 	word_register,
 	port_number,
@@ -117,10 +117,10 @@ class Symbols {
 		symbol_type type_name( char *domain ) {
 			if( strcmp( domain, "program_address" ) == 0 ) return( program_address );
 			if( strcmp( domain, "memory_address" ) == 0 ) return( memory_address );
+			if( strcmp( domain, "data_address" ) == 0 ) return( data_address );
 			if( strcmp( domain, "bit_constant" ) == 0 ) return( bit_constant );
 			if( strcmp( domain, "byte_constant" ) == 0 ) return( byte_constant );
 			if( strcmp( domain, "word_constant" ) == 0 ) return( word_constant );
-			if( strcmp( domain, "program_word" ) == 0 ) return( program_word );
 			if( strcmp( domain, "byte_register" ) == 0 ) return( byte_register );
 			if( strcmp( domain, "word_register" ) == 0 ) return( word_register );
 			if( strcmp( domain, "port_number" ) == 0 ) return( port_number );
@@ -131,10 +131,10 @@ class Symbols {
 			switch( domain ) {
 				case program_address: return( "program_address" );
 				case memory_address: return( "memory_address" );
+				case data_address: return( "data_address" );
 				case bit_constant: return( "bit_constant" );
 				case byte_constant: return( "byte_constant" );
 				case word_constant: return( "word_constant" );
-				case program_word: return( "program_word" );
 				case byte_register: return( "byte_register" );
 				case word_register: return( "word_register" );
 				case port_number: return( "port_number" );
@@ -301,10 +301,6 @@ class Symbols {
 					snprintf( buffer, max, "%c%04X", hexidecimal, value & 0xFFFF );
 					break;
 				}
-				case program_word: {
-					snprintf( buffer, max, "%c%04X", hexidecimal, value & 0xFFFF );
-					break;
-				}
 				case byte_register: {
 					snprintf( buffer, max, "r%d", value );
 					break;
@@ -315,6 +311,10 @@ class Symbols {
 				}
 				case port_number: {
 					snprintf( buffer, max, "%c%02X", hexidecimal, value );
+					break;
+				}
+				case memory_address: {
+					snprintf( buffer, max, "%c%04X", hexidecimal, value );
 					break;
 				}
 				default: {

@@ -249,8 +249,7 @@ class Coverage {
 			ASSERT( to != NULL );
 			ASSERT( select != NULL );
 			ASSERT( selected > 0 );
-			
-			block_record *br;
+
 			printf( "Target" );
 			for( int i = 0; i < selected; i++ ) {
 				switch( select[ i ]) {
@@ -289,7 +288,8 @@ class Coverage {
 				}
 			}
 			printf( "\n" );
-			for( br = _data; br; br = br->next ) {
+
+			for( block_record *br = _data; br; br = br->next ) {
 				for( word bi = 0; bi < block_size; bi++ ) {
 					cons_record *cr;
 					if(( cr = br->cons[ bi ])) {
@@ -297,9 +297,10 @@ class Coverage {
 							page_record *pr;
 							if(( pr = cr->page[ ci ])) {
 								for( word pi = 0; pi < page_size; pi++ ) {
-									access_record *ar = &( pr->address[ pi ]);
+									access_record	*ar = &( pr->address[ pi ]);
+
 									for( int i = 0; i < selected; i++ ) {
-										if( ar->count[ select[ i ]]) {
+										if( ar->count[ select[ i ]] ) {
 											fprintf( to, "%06X", (int)combine( br->number, bi, ci, pi ));
 											for( int j = 0; j < selected; printf( "\t%d", (int)ar->count[ select[ j++ ]]));
 											printf( "\n" );

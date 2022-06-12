@@ -41,8 +41,77 @@
 #include "Pin.h"
 #include "AnalogueConversion.h"
 #include "Port.h"
-#include "SerialComms.h"
+#include "SerialDevice.h"
+#include "SerialTerminal.h"
+#include "Factory.h"
 #include "Coverage.h"
+
+//
+//	Define global environment factory.
+//
+
+class Environment : public Factory {
+	private:
+		Reporter	*_report;
+		
+		static const int max_sio = 4;
+
+		SerialIO	*_sio[ max_sio ];
+
+	public:
+		//
+		//	Initialise as empty.
+		//
+		Environment( Reporter *report ) {
+			_report = report;
+			for( int i = 0; i < max_sio; _sio[ i++ ] = NULL );
+		}
+
+		//
+		//	The Environment API
+		//
+		void sio_display( int instance, FILE *to ) {
+			SerialIO	*p;
+			
+			if( instance >= max_sio ) {
+				_report->report( Error_Level, Factory_Module, 0, Address_OOR );
+				return;
+			}
+			if(( p = _sio[ instance ]) == NULL ) {
+				_report->report( Error_Level, Factory_Module, 0, Device_Missing );
+				return;
+			}
+			p->display( to );
+		}
+		void sio_supply( int instance, char value ) {
+			SerialIO	*p;
+			
+			if( instance >= max_sio ) {
+				_report->report( Error_Level, Factory_Module, 0, Address_OOR );
+				return;
+			}
+			if(( p = _sio[ instance ]) == NULL ) {
+				_report->report( Error_Level, Factory_Module, 0, Device_Missing );
+				return;
+			}
+			p->supply( value );
+		}
+		
+		//
+		//	The Factory API
+		//
+		virtual SerialIO *serial_io( int instance ) {
+			SerialIO *s;
+			
+			ASSERT( instance < max_sio );
+			ASSERT( _sio[ instance ] == NULL );
+			
+			s = new SerialTerminal<10,40>();
+			_sio[ instance ] = s;
+			return( s );
+		}
+
+};
 
 
 //
@@ -62,7 +131,7 @@ static void Ctrl_C( int dummy ) {
 //
 #define EXT_IO(n)	((n)-0x20)
 
-static CPU *atmega328p( Reporter *channel, Coverage *tracker, const char *load, Fuses *fuses, Clock *crystal ) {
+static CPU *atmega328p( Reporter *channel, Coverage *tracker, const char *load, Fuses *fuses, Clock *crystal, Factory *make ) {
 	
 					//
 					//	Set up all the pins on the package.  We create
@@ -153,13 +222,17 @@ static CPU *atmega328p( Reporter *channel, Coverage *tracker, const char *load, 
 					//
 					//	The USART
 					//
-	SerialComms *serial		= new SerialComms( channel, 0 );
-						ports->segment( new DeviceRegister( serial, SerialComms::UDRn ), EXT_IO( 0xC6 ));
-						ports->segment( new DeviceRegister( serial, SerialComms::UBRRnH ), EXT_IO( 0xC5 ));
-						ports->segment( new DeviceRegister( serial, SerialComms::UBRRnL ), EXT_IO( 0xC4 ));
-						ports->segment( new DeviceRegister( serial, SerialComms::UCSRnC ), EXT_IO( 0xC2 ));
-						ports->segment( new DeviceRegister( serial, SerialComms::UCSRnB ), EXT_IO( 0xC1 ));
-						ports->segment( new DeviceRegister( serial, SerialComms::UCSRnA ), EXT_IO( 0xC0 ));
+	SerialDevice *serial		= new SerialDriver<19,20,21>( channel, 0, irq_router, make->serial_io( 0 ));
+						ports->segment( new DeviceRegister( serial, SerialDevice::UDRn ), EXT_IO( 0xC6 ));
+						ports->segment( new DeviceRegister( serial, SerialDevice::UBRRnH ), EXT_IO( 0xC5 ));
+						ports->segment( new DeviceRegister( serial, SerialDevice::UBRRnL ), EXT_IO( 0xC4 ));
+						ports->segment( new DeviceRegister( serial, SerialDevice::UCSRnC ), EXT_IO( 0xC2 ));
+						ports->segment( new DeviceRegister( serial, SerialDevice::UCSRnB ), EXT_IO( 0xC1 ));
+						ports->segment( new DeviceRegister( serial, SerialDevice::UCSRnA ), EXT_IO( 0xC0 ));
+						//
+						//	Needs an understanding of time...
+						//
+						crystal->add( SerialDevice::System_Clock, (Tick *)serial );
 
 					//
 					//	Declare the processor core.
@@ -181,8 +254,7 @@ static CPU *atmega328p( Reporter *channel, Coverage *tracker, const char *load, 
 						ports->segment( new DeviceRegister( (Notification *)processor, AVR_CPU::MCUCR ), 0x35 );
 						ports->segment( new DeviceRegister( (Notification *)processor, AVR_CPU::MCUSR ), 0x34 );
 						//
-						//	The processor sees a WDT clock at 128 KHz, but does
-						//	not need to see any other clock input.
+						//	The processor sees a WDT clock at 128 KHz.
 						//
 						ports->segment( new DeviceRegister( (Notification *)crystal, Clock::CLKPR ), EXT_IO( 0x61 ));
 						crystal->add( AVR_CPU::System_Clock, (Tick *)processor );
@@ -335,9 +407,10 @@ int main( int argc, char* argv[]) {
 		}
 	}
 	
+	Environment	*global		= new Environment( channel );
 	BreakPoint	*breaks		= new BreakPoint();
 	Coverage	*tracker	= new Coverage( channel, 0 );
-	CPU		*simulate	= atmega328p( channel, tracker, hex, fuses, crystal );
+	CPU		*simulate	= atmega328p( channel, tracker, hex, fuses, crystal, global );
 
 	//
 	//	Prepare to catch Ctrl-C
@@ -378,7 +451,19 @@ int main( int argc, char* argv[]) {
 				bool	counter;
 				int	left, count, n;
 
-				counter = (( left = ( count = atoi( dec ))) > 0 );
+				if( *dec == 's' ) {
+					//
+					//	set up a break after this instruction
+					//
+					counter = false;
+					breaks->add( simulate->next_instruction() + simulate->instruction_size());
+				}
+				else {
+					//
+					//	One or fixed number of instructions
+					//
+					counter = (( left = ( count = atoi( dec ))) > 0 );
+				}
 				while( keep_running ) {
 					simulate->step();
 					if(( n = breaks->check( simulate->next_instruction())) != 0 ) {
@@ -403,13 +488,25 @@ int main( int argc, char* argv[]) {
 			}
 			case 't': {
 				//
-				//	Trace instructions.  Like rujn but displays instructions
+				//	Trace instructions.  Like run but displays instructions
 				//	as they are about to be executed.
 				//
 				bool	counter;
 				int	left, count, n;
 
-				counter = (( left = ( count = atoi( dec ))) > 0 );
+				if( *dec == 's' ) {
+					//
+					//	set up a break after this instruction
+					//
+					counter = false;
+					breaks->add( simulate->next_instruction() + simulate->instruction_size());
+				}
+				else {
+					//
+					//	One or fixed number of instructions
+					//
+					counter = (( left = ( count = atoi( dec ))) > 0 );
+				}
 				while( keep_running ) {
 					simulate->step();
 					if(( n = breaks->check( simulate->next_instruction())) != 0 ) {
@@ -490,6 +587,49 @@ int main( int argc, char* argv[]) {
 				}
 				break;
 			}
+			case 'p': {
+				//
+				//	Dump a number of words of program space.
+				//
+				dword		a;
+				int		c;
+				char		*at;
+				AddressDomain	d;
+				symbol_type	s;
+
+				//
+				//	Is the divide by two flag there?
+				//
+				if( *dec == '!' ) {
+					dec++;
+					d = Data_Address;
+					s = data_address;
+				}
+				else {
+					d = Program_Address;
+					s = program_address;
+				}
+				if(( at = strchr( dec, '@' )) == NULL ) {
+					printf( "Start address not supplied.\n" );
+					break;
+				}
+				*at++ = EOS;
+				if( !labels->evaluate( s, at, &a )) {
+					printf( "Start address not recognised.\n" );
+					break;
+				}
+				if(( c = atoi( dec )) == 0 ) c = 1;
+				while( c-- ) {
+					if( simulate->examine( d, a, labels, inst, BUFFER )) {
+						printf( "%s: %s\n", labels->expand( s, a, adrs, BUFFER ), inst );
+					}
+					else {
+						printf( "%s: Undefined\n", labels->expand( s, a, adrs, BUFFER ));
+					}
+					a += 1;
+				}
+				break;
+			}
 			case 'w': {
 				//
 				//	Write out the symbol table to a file.
@@ -552,6 +692,49 @@ int main( int argc, char* argv[]) {
 
 				if( !breaks->remove( n )) {
 					printf( "Invalid breakpoint %d.\n", n );
+				}
+				break;
+			}
+			case '!': {
+				char c = *dec++;
+				switch( c ) {
+					case 'd': {
+						//
+						//	Display serial IO status
+						//
+						global->sio_display( atoi( dec ), stdout );
+						break;
+					}
+					case 's': {
+						char	*p;
+						dword	v;
+						
+						//
+						//	Supply byte to serial IO
+						//
+						if(( p = strchr( dec, COMMA )) == NULL ) {
+							printf( "Supply byte to serial: !sN,V\n" );
+						}
+						else {
+							*p++ = EOS;
+							if( labels->evaluate( byte_constant, p, &v )) global->sio_supply( atoi( dec ), (char)v );
+						}
+						break;
+					}
+					case 'r': {
+						//
+						//	Reset MCU.
+						//
+						simulate->reset();
+						crystal->reset();
+						tracker->clear();
+						printf( "MCU reset.\n" );
+						break;
+					}
+					default: {
+						printf( "Eh '!%c'?\n", c );
+						break;
+					}
 				}
 				break;
 			}
@@ -706,12 +889,15 @@ int main( int argc, char* argv[]) {
 						printf( "Help:\n" );
 						printf( "<CR>\tSingle step\n" );
 						printf( "r\tRun\n" );
+						printf( "rs\tRun over the next statement/subroutine.\n" );
 						printf( "rN\tRun N instructions\n" );
 						printf( "t\tTrace\n" );
+						printf( "ts\tTrace over the next statement/subroutine.\n" );
 						printf( "tN\tTrace N instructions\n" );
 						printf( "dN\tDisassemble N instructions\n" );
 						printf( "dN@A\tas above but from address A\n" );
 						printf( "mN@A\tDump N bytes of data space at address A\n" );
+						printf( "pN@A\tDump N words of program space at address A\n" );
 						printf( "wF\tSave symbols to file F\n" );
 						printf( "bA\tSet breakpoint at address A\n" );
 						printf( "xN\tDelete breakpoint number N\n" );
@@ -726,27 +912,11 @@ int main( int argc, char* argv[]) {
 						printf( "?ca\tDisplay all coverage data\n" );
 						printf( "?cp\tDisplay program coverage data\n" );
 						printf( "?cm\tDisplay memory coverage data\n" );
+						printf( "!r\tCPU reset\n" );
+						printf( "!dT\tDisplay serial terminal T\n" );
+						printf( "!sT,N\tSupply value N to serial terminal T\n" );
 						printf( "\n\tN and A have the form '({symbol}[+-])?{number}'\n" );
 						printf( "\twhere number is '$' hex, '%%' bin or decimal.\n" );
-						break;
-					}
-				}
-				break;
-			}
-			case '!': {
-				switch( *dec ) {
-					case 'r': {
-						//
-						//	Reset MCU.
-						//
-						simulate->reset();
-						crystal->reset();
-						tracker->clear();
-						printf( "MCU reset.\n" );
-						break;
-					}
-					default: {
-						printf( "Eh '!%c'?\n", *dec );
 						break;
 					}
 				}

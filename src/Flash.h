@@ -171,6 +171,12 @@ class Flash {
 		//	Interface to load a hex file into flash.
 		//
 		virtual bool load_hex( const char *filename ) = 0;
+
+		//
+		//	Program space examiner API
+		//
+		virtual bool examine_words( dword adrs, Symbols *labels, char *buffer, int max ) = 0;
+		virtual bool examine_bytes( dword adrs, Symbols *labels, char *buffer, int max ) = 0;
 };
 
 #endif

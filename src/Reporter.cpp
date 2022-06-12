@@ -33,7 +33,9 @@ static ModuleName modules[] = {
 	{ Pin_Module,		"Pin"			},
 	{ Port_Module,		"Port"			},
 	{ Coverage_Module,	"Coverage"		},
-	{ Application_Module,	"Application"		}
+	{ Application_Module,	"Application"		},
+	{ Factory_Module,	"Factory"		},
+	{ Serial_Module,	"Serial"		}
 };
 
 char *Reporter::module_name( Modules module, char *buffer, int len ) {

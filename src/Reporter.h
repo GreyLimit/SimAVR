@@ -38,7 +38,9 @@ typedef enum {
 	Pin_Module,
 	Port_Module,
 	Coverage_Module,
-	Application_Module
+	Application_Module,
+	Factory_Module,
+	Serial_Module
 } Modules;
 
 //

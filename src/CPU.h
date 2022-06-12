@@ -18,7 +18,9 @@
 typedef enum {
 	Register_Address,
 	Port_Address,
-	Memory_Address
+	Memory_Address,
+	Program_Address,
+	Data_Address
 } AddressDomain;
 
 //
@@ -49,6 +51,11 @@ class CPU {
 		//	Return the address of the next instruction to execute.
 		//
 		virtual dword next_instruction( void ) = 0;
+
+		//
+		//	Return the size of the next instruction to execute.
+		//
+		virtual word instruction_size( void ) = 0;
 		
 		//
 		//	Provide an interface to GPIO pins available on the CPU.

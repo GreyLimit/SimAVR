@@ -25,7 +25,8 @@ class BreakPoint {
 		//
 		//	This is the active list of breakpoints
 		//
-		breakpoint		*_active;
+		breakpoint		*_active,
+					*_transient;
 		//
 		//	This is the list of reusable records.
 		//
@@ -39,6 +40,7 @@ class BreakPoint {
 	public:
 		BreakPoint( void ) {
 			_active = NULL;
+			_transient = NULL;
 			_inactive = NULL;
 			_next = 1;
 		}
@@ -50,10 +52,47 @@ class BreakPoint {
 		//	(1..n) if this is a valid break point or 0 if not.
 		//
 		int check( dword adrs ) {
-			for( breakpoint *p = _active; p != NULL; p = p->next ) {
+			breakpoint **a, *p;
+
+			//
+			//	Transient break points.
+			//
+			a = &_transient;
+			while(( p = *a )) {
+				if( adrs == p->starts ) {
+					*a = p->next;
+					p->next = _inactive;
+					_inactive = p;
+					return( p->index );
+				}
+				a = &( p->next );
+			}
+			//
+			//	Long term break points.
+			//
+			for( p = _active; p != NULL; p = p->next ) {
 				if(( adrs >= p->starts )&&( adrs < p->ends )) return( p->index );
 			}
 			return( 0 );
+		}
+		//
+		//	Add a new transient break point on a single address.
+		//
+		int add( dword adrs ) {
+			breakpoint *p;
+
+			if(( p = _inactive )) {
+				_inactive = _inactive->next;
+			}
+			else {
+				p = new breakpoint;
+			}
+			p->index = _next++;
+			p->starts = adrs;
+			p->ends = adrs+1;
+			p->next = _transient;
+			_transient = p;
+			return( p->index );
 		}
 		//
 		//	Add a new breakpoint and return its number or 0 on failure.
@@ -113,6 +152,14 @@ class BreakPoint {
 		bool remove( int number ) {
 			breakpoint *p, **a;
 
+			for( a = &_transient; ( p = *a ) != NULL; a = &( p->next )) {
+				if( number == p->index ) {
+					*a = p->next;
+					p->next = _inactive;
+					_inactive = p;
+					return( true );
+				}
+			}
 			for( a = &_active; ( p = *a ) != NULL; a = &( p->next )) {
 				if( number == p->index ) {
 					*a = p->next;
@@ -130,6 +177,13 @@ class BreakPoint {
 		//	a valid address).
 		//
 		bool address( int number, dword *starts, dword *ends ) {
+			for( breakpoint *p = _transient; p != NULL; p = p->next ) {
+				if( number == p->index ) {
+					*starts = p->starts;
+					*ends = p->ends;
+					return( true );
+				}
+			}
 			for( breakpoint *p = _active; p != NULL; p = p->next ) {
 				if( number == p->index ) {
 					*starts = p->starts;
@@ -145,6 +199,7 @@ class BreakPoint {
 		int list( int *array, int max ) {
 			int count = 0;
 
+			for( breakpoint *p = _transient; ( p != NULL )&&( count < max ); p = p->next ) array[ count++ ] = p->index;
 			for( breakpoint *p = _active; ( p != NULL )&&( count < max ); p = p->next ) array[ count++ ] = p->index;
 			return( count );
 		}

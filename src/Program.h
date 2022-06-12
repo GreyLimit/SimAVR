@@ -636,6 +636,25 @@ template< word _page_size, word _page_count, word _boot_pages, word _op_duration
 			return( adrs % _page_size );
 		}
 
+		//
+		//	Program space examiner API
+		//
+		virtual bool examine_words( dword adrs, Symbols *labels, char *buffer, int max ) {
+			if( adrs >= total ) return( false );
+			snprintf( buffer, max, "$%04X", (int)_storage[ adrs ]);
+			return( true );
+		}
+		virtual bool examine_bytes( dword adrs, Symbols *labels, char *buffer, int max ) {
+
+			if( adrs >= ( total << 1 )) return( false );
+			if( adrs & 1 ) {
+				snprintf( buffer, max, "$%02X", (int)high_byte( _storage[ adrs >> 1 ]));
+			}
+			else {
+				snprintf( buffer, max, "$%02X", (int)low_byte( _storage[ adrs >> 1 ]));
+			}
+			return( true );
+		}
 };
 
 #endif
