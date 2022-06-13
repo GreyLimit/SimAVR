@@ -645,13 +645,20 @@ template< word _page_size, word _page_count, word _boot_pages, word _op_duration
 			return( true );
 		}
 		virtual bool examine_bytes( dword adrs, Symbols *labels, char *buffer, int max ) {
+			byte	v;
 
 			if( adrs >= ( total << 1 )) return( false );
 			if( adrs & 1 ) {
-				snprintf( buffer, max, "$%02X", (int)high_byte( _storage[ adrs >> 1 ]));
+				v = high_byte( _storage[ adrs >> 1 ]);
 			}
 			else {
-				snprintf( buffer, max, "$%02X", (int)low_byte( _storage[ adrs >> 1 ]));
+				v = low_byte( _storage[ adrs >> 1 ]);
+			}
+			if(( v > SPACE )||( v < DEL )) {
+				snprintf( buffer, max, "$%02X %c", (int)v, (int)v );
+			}
+			else {
+				snprintf( buffer, max, "$%02X", (int)v );
 			}
 			return( true );
 		}

@@ -93,7 +93,16 @@ template< word size > class SRAM : public Memory {
 		//
 		virtual bool examine( word adrs, Symbols *labels, char *buffer, int max ) {
 			if( adrs >= size ) return( false );
-			snprintf( buffer, max, "SRAM[%04X]=%02X", (int)adrs, (int)_ram[ adrs ]);
+			
+			byte	v;
+			
+			v = _ram[ adrs ];
+			if(( v > SPACE )&&( v < DEL )) {
+				snprintf( buffer, max, "SRAM[%04X]=%02X %c", (int)adrs, (int)v, (int)v );
+			}
+			else {
+				snprintf( buffer, max, "SRAM[%04X]=%02X", (int)adrs, (int)v );
+			}
 			return( true );
 		}
 

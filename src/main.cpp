@@ -630,6 +630,43 @@ int main( int argc, char* argv[]) {
 				}
 				break;
 			}
+			case 's': {
+				//
+				//	Set a symbol to a value
+				//
+				char		*e,
+						*d;
+				symbol_type	t;
+				
+				if(( e = strchr( dec, '=' )) != NULL ) {
+					*e++ = EOS;
+				}
+				if(( d = strchr( dec, '/' )) == NULL ) {
+					printf( "No symbol separator.\n" );
+					break;
+				}
+				*d++ = EOS;
+				if( strlen( d ) < 1 ) {
+					printf( "No symbol name provided.\n" );
+					break;
+				}
+				if(( t = labels->type_name( dec )) == unspecified_type ) break;
+				if( e == NULL ) {
+					//
+					//	Delete symbol.
+					//
+					if( !labels->delete_label( d, t )) printf( "Unable to delete symbol '%s/%s'\n", dec, d );
+				}
+				else {
+					dword	v;
+					
+					if( labels->evaluate( t, e, &v )) {
+						if( !labels->new_label( d, t, v )) {
+							printf( "Assignment failed.\n" );
+						}
+					}
+				}
+			}
 			case 'w': {
 				//
 				//	Write out the symbol table to a file.
@@ -747,7 +784,7 @@ int main( int argc, char* argv[]) {
 						//	Display Symbols by value.
 						//
 						r = 0;
-						while( labels->show_symbol( r++, false, inst, BUFFER )) printf( "%s\n", inst );
+						while( labels->show_symbol( r++, false, dec, inst, BUFFER )) printf( "%s\n", inst );
 						break;
 					}
 					case 's': {
@@ -757,7 +794,7 @@ int main( int argc, char* argv[]) {
 						//	Display Symbols by name.
 						//
 						r = 0;
-						while( labels->show_symbol( r++, true, inst, BUFFER )) printf( "%s\n", inst );
+						while( labels->show_symbol( r++, true, dec, inst, BUFFER )) printf( "%s\n", inst );
 						break;
 					}
 					case 'r': {
@@ -898,6 +935,7 @@ int main( int argc, char* argv[]) {
 						printf( "dN@A\tas above but from address A\n" );
 						printf( "mN@A\tDump N bytes of data space at address A\n" );
 						printf( "pN@A\tDump N words of program space at address A\n" );
+						printf( "sD/S=V\tSet symbol S (address domain D) to value V\n" );
 						printf( "wF\tSave symbols to file F\n" );
 						printf( "bA\tSet breakpoint at address A\n" );
 						printf( "xN\tDelete breakpoint number N\n" );
