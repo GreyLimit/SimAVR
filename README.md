@@ -107,3 +107,11 @@ this being a break point which is only triggered once before being automatically
 removed.
 
 I'm sure there is more.
+
+With this all seeming to work, the actual *simulation* of a running Arduino AVR
+program is falling short of actually *doing* anything.  Instructions execute, memory
+is loaded things happen, but not what is anticipated.  Typically the program eventually
+loops back to calling address $000000 and restarts the whole thing again.
+
+I will be delighted when the ASCII table generator generates an ASCII table (in the virtualised
+tty terminal the simulation has gained).
