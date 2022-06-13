@@ -96,3 +96,14 @@ Target	Exec	Jump	Call	Data	Read	Write	Stack
 BOOT+223: ldi ZL,$60
 > 
 ```
+
+While the above remains essentailly accurate, the simulation has been improving and 
+elements of the system show above are better (eg code and memory coverage can now
+be reset and displayed separately).
+
+The ability to 'execute over' an instruction (eg call or rcall) with the commands
+'rs' and 'ts'.  The simulation now supports transient breakpoints to facilitate
+this being a break point which is only triggered once before being automatically
+removed.
+
+I'm sure there is more.
