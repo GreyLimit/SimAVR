@@ -69,6 +69,7 @@ class Symbols {
 			char		*name;
 			symbol_type	type;
 			dword		value;
+			bool		tag;
 			label		*next_by_name,
 					*next_by_value,
 					**prev_by_value;
@@ -102,49 +103,15 @@ class Symbols {
 
 			last = NULL;
 			for( look = _by_value; look; look = look->next_by_value ) {
+				if( value < look->value ) break;
 				if( type == look->type ) {
 					if( value == look->value ) return( look );
 					last = look;
 				}		
-				if( value < look->value ) break;
 			}
 			return( last );
 		}
 
-		//
-		//	Convert text to a symbol type value or the other way.
-		//
-		symbol_type type_name( char *domain ) {
-			if( strcmp( domain, "program_address" ) == 0 ) return( program_address );
-			if( strcmp( domain, "memory_address" ) == 0 ) return( memory_address );
-			if( strcmp( domain, "data_address" ) == 0 ) return( data_address );
-			if( strcmp( domain, "bit_constant" ) == 0 ) return( bit_constant );
-			if( strcmp( domain, "byte_constant" ) == 0 ) return( byte_constant );
-			if( strcmp( domain, "word_constant" ) == 0 ) return( word_constant );
-			if( strcmp( domain, "byte_register" ) == 0 ) return( byte_register );
-			if( strcmp( domain, "word_register" ) == 0 ) return( word_register );
-			if( strcmp( domain, "port_number" ) == 0 ) return( port_number );
-			(void)_report->report( Error_Level, Symbols_Module, _instance, Record_Error, "Symbol domain '%s' not recognised", domain );
-			return( unspecified_type );
-		}
-		const char *name_type( symbol_type domain ) {
-			switch( domain ) {
-				case program_address: return( "program_address" );
-				case memory_address: return( "memory_address" );
-				case data_address: return( "data_address" );
-				case bit_constant: return( "bit_constant" );
-				case byte_constant: return( "byte_constant" );
-				case word_constant: return( "word_constant" );
-				case byte_register: return( "byte_register" );
-				case word_register: return( "word_register" );
-				case port_number: return( "port_number" );
-				default: {
-					(void)_report->report( Terminate_Level, Symbols_Module, _instance, Record_Error, "Invalid symbol domain reference %d", domain );
-					break;
-				}
-			}
-			return( "unrecognised_type" );
-		}
 
 		//
 		//	Two routines for checking characters are valid
@@ -200,15 +167,59 @@ class Symbols {
 		}
 
 		//
+		//	Convert text to a symbol type value or the other way.
+		//
+		symbol_type type_name( char *domain ) {
+			if( strcmp( domain, "program_address" ) == 0 ) return( program_address );
+			if( strcmp( domain, "PA" ) == 0 ) return( program_address );
+			if( strcmp( domain, "memory_address" ) == 0 ) return( memory_address );
+			if( strcmp( domain, "MA" ) == 0 ) return( memory_address );
+			if( strcmp( domain, "data_address" ) == 0 ) return( data_address );
+			if( strcmp( domain, "DA" ) == 0 ) return( data_address );
+			if( strcmp( domain, "bit_constant" ) == 0 ) return( bit_constant );
+			if( strcmp( domain, "byte_constant" ) == 0 ) return( byte_constant );
+			if( strcmp( domain, "word_constant" ) == 0 ) return( word_constant );
+			if( strcmp( domain, "byte_register" ) == 0 ) return( byte_register );
+			if( strcmp( domain, "word_register" ) == 0 ) return( word_register );
+			if( strcmp( domain, "port_number" ) == 0 ) return( port_number );
+			(void)_report->report( Error_Level, Symbols_Module, _instance, Record_Error, "Symbol domain '%s' not recognised", domain );
+			return( unspecified_type );
+		}
+		const char *name_type( symbol_type domain ) {
+			switch( domain ) {
+				case program_address: return( "program_address" );
+				case memory_address: return( "memory_address" );
+				case data_address: return( "data_address" );
+				case bit_constant: return( "bit_constant" );
+				case byte_constant: return( "byte_constant" );
+				case word_constant: return( "word_constant" );
+				case byte_register: return( "byte_register" );
+				case word_register: return( "word_register" );
+				case port_number: return( "port_number" );
+				default: {
+					(void)_report->report( Terminate_Level, Symbols_Module, _instance, Record_Error, "Invalid symbol domain reference %d", domain );
+					break;
+				}
+			}
+			return( "unrecognised_type" );
+		}
+		
+		//
 		//	Add a new label
 		//
 		bool new_label( char *name, symbol_type type, dword value ) {
 			label	**adrs, *ptr, *rec;
 
+			//
+			//	check label itself is ok
+			//
 			if( ident_len( name ) != strlen( name )) {
 				_report->report( Error_Level, Symbols_Module, _instance, Invalid_Identifier, "Invalid identifier '%s'", name );
 				return( false );
 			}
+			//
+			//	Insert into the name order list
+			//
 			adrs = &_by_name;
 			while(( ptr = *adrs ) != NULL ) {
 				if( strcmp( name, ptr->name ) < 0 ) break;
@@ -222,6 +233,7 @@ class Symbols {
 			rec->name = strdup( name );
 			rec->type = type;
 			rec->value = value;
+			rec->tag = false;
 			rec->next_by_name = ptr;
 			*adrs = rec;
 			//
@@ -242,7 +254,7 @@ class Symbols {
 		//
 		//	delete a label
 		//
-		bool delete_label( char *name ) {
+		bool delete_label( char *name, symbol_type type ) {
 			label	**adrs, *ptr;
 
 			adrs = &_by_name;
@@ -342,12 +354,14 @@ class Symbols {
 					snprintf( buffer, max, "%s", look->name );
 					return( buffer );
 				}
-				if(( type == program_address )||( type == memory_address )) {
-					if(( look->value < value )&&(( type == program_address )||( type == memory_address ))) {
-						snprintf( buffer, max, "%s+%d", look->name, ( value - look->value  ));
-						return( buffer );
-					}
+				if(( type == program_address )||( type == memory_address )||( type == data_address )) {
+					ASSERT( look->value < value );
+					snprintf( buffer, max, "%s+%d", look->name, ( value - look->value  ));
+					return( buffer );
 				}
+				//
+				//	Fall through to numerical value.
+				//
 			}
 			//
 			//	Output a pure numerical answer.
@@ -534,18 +548,38 @@ class Symbols {
 		//	create textual representation of the 'i'th symbol
 		//	(starting at 0) return true if there is such a symbol.
 		//
-		bool show_symbol( int i, bool name_order, char *buffer, int max ) {
+		bool show_symbol( int i, bool name_order, char *pattern, char *buffer, int max ) {
 			char	expr[ max_buffer ];
 			label	*look;
-
 			
+			if( i == 0 ) {
+				bool	all;
+				int	first;
+
+				if( pattern != NULL ) {
+					all = (( first = strlen( pattern )) == 0 );
+				}
+				else {
+					all = true;
+					first = 0;
+				}
+				for( look = _by_name; look; look = look->next_by_name ) {
+					if(!( look->tag = all )) {
+						look->tag = ( strncmp( pattern, look->name, first ) == 0 );
+					}
+				}
+			}
 			if( name_order ) {
-				for( look = _by_name; look && i; i-- ) look = look->next_by_name;
+				for( look = _by_name; look; look = look->next_by_name ) {
+					if( look->tag ) if( i-- == 0 ) break;
+				}
 				if( look == NULL ) return( false );
 				snprintf( buffer, max,  "%s/%s=%s", name_type( look->type ), look->name, constant( look->type, look->value, expr, max_buffer ));
 				return( true );
 			}
-			for( look = _by_value; look && i; i-- ) look = look->next_by_value;
+			for( look = _by_value; look; look = look->next_by_value ) {
+				if( look->tag ) if( i-- == 0 ) break;
+			}
 			if( look == NULL ) return( false );
 			snprintf( buffer, max,  "%s/%s=%s", name_type( look->type ), look->name, constant( look->type, look->value, expr, max_buffer ));
 			return( true );
