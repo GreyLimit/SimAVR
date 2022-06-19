@@ -12,3 +12,18 @@ source of additional requirements which (left unsatisfied) cause the execution o
 good executables to diverge from the same executable running on the real hardware.
 
 This is solveable but requires continued and focused work on devices
+
+## Future Actions
+
+### Documentation
+
+There is no documentation targeted towards an end user.  Operation of the simulation has
+been limited to myself and as "I know" how it works there has been no driver and need for
+suitably structured information.
+
+This is now an issue and ought to be created
+
+### Drivers
+
+Drivers for more of the internal hardware devices need to be completed, debugged or simply
+created (where they are simply missing).
