@@ -296,7 +296,10 @@ class Symbols {
 							char *a = buffer;
 							
 							*a++ = binary;
-							while( len-- ) *a++ = ( reversed & 1 )? '1': '0';
+							while( len-- ) {
+								*a++ = ( reversed & 1 )? '1': '0';
+								reversed >>= 1;
+							}
 							*a = EOS;
 						}
 					}

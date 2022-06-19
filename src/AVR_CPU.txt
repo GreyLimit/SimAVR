@@ -4948,9 +4948,9 @@ public:
 {B}
 		char	ds[ symbol_buffer ],
 			is[ symbol_buffer ];
-			
+
 		byte	imm8 = arg_imm8( opcode );
-	
+
 		if( count_ones( imm8 ) < 4 ) {
 			snprintf( buffer, max, "sbr %s,%s",	labels->expand( byte_register, arg_d16_d31( opcode ), ds, symbol_buffer ),
 								labels->expand( bit_constant, imm8, is, symbol_buffer ));
@@ -5495,7 +5495,9 @@ public:
 		//
 		//	1111 110d dddd 0bbb
 		//
-		if( state->read_reg( arg_d0_d31( opcode )) & arg_bit_mask( opcode )) state->set_skip_next();
+		if( state->read_reg( arg_d0_d31( opcode )) & arg_bit_mask( opcode )) {
+			state->set_skip_next();
+		}
 		return( 1 );
 	}
 	virtual word disassemble( dword address, word opcode, Symbols *labels, AVR_CPU *state, char *buffer, int max ) {
