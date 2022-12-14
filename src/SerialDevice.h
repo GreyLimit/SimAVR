@@ -139,12 +139,12 @@ class SerialDevice : public Notification, Tick {
 		//
 		//	UCSRnC bit field definitions
 		//
-		static const byte ucsrc_UMSEL_lsb	= BIT( byte, 6 );
+		static const byte ucsrc_UMSEL_lsb	= 6;
 		static const byte ucsrc_UMSEL_mask	= MASK( byte, 2 );
-		static const byte ucsrc_UPM_lsb		= BIT( byte, 4 );
+		static const byte ucsrc_UPM_lsb		= 4;
 		static const byte ucsrc_UPM_mask	= MASK( byte, 2 );
 		static const byte ucsrc_USBS		= BIT( byte, 3 );
-		static const byte ucsrc_UCSZ_lsb	= BIT( byte, 1 );
+		static const byte ucsrc_UCSZ_lsb	= 1;
 		static const byte ucsrc_UCSZ_mask	= MASK( byte, 2 );
 		static const byte ucsrc_UCPOL		= BIT( byte, 0 );
 
